@@ -6,7 +6,6 @@ struct PlaneRaycastResult {
 	vec3 normal;
 };
 const PlaneRaycastResult planeRaycastMiss = PlaneRaycastResult (false, 0.0, vec3(0.0));
-
 PlaneRaycastResult planeRaycast(vec3 planeNormal, float planeDistance, vec3 rayStart, vec3 rayEnd) {
 	float p = dot(planeNormal, planeNormal * planeDistance);
 	float ad = dot(rayStart, planeNormal);
@@ -18,9 +17,16 @@ PlaneRaycastResult planeRaycast(vec3 planeNormal, float planeDistance, vec3 rayS
 	return PlaneRaycastResult (true, (p - ad) / divisor, planeNormal);
 }
 
-PlaneRaycastResult triangleRaycast(vec3 v1, vec3 v2, vec3 v3, vec3 rayStart, vec3 rayEnd) {
+struct TriangleRaycastResult {
+	bool hit;
+	float t;
+	vec3 normal;
+	vec3 barycentric;
+};
+const TriangleRaycastResult triangleRaycastMiss = TriangleRaycastResult (false, 0.0, vec3(0.0), vec3(0.0));
+TriangleRaycastResult triangleRaycast(vec3 v1, vec3 v2, vec3 v3, vec3 rayStart, vec3 rayEnd) {
 	if (rayStart == rayEnd) {
-		return planeRaycastMiss;
+		return triangleRaycastMiss;
 	}
 
 	vec3 startToEnd = rayEnd - rayStart;
@@ -35,19 +41,29 @@ PlaneRaycastResult triangleRaycast(vec3 v1, vec3 v2, vec3 v3, vec3 rayStart, vec
 	float nDotDirection = dot(normal, rayDirection);
 	if (nDotDirection == 0.0) {
 		// Parallel to plane
-		return planeRaycastMiss;
+		return triangleRaycastMiss;
 	}
 
 	float tForDirection = -(dot(normal, rayStart) + d) / nDotDirection;
 	vec3 p = rayStart + rayDirection * tForDirection;
+
+	vec3 barycentric = vec3(
+		dot(normal, cross(v1ToV2, v1 - p)),
+		dot(normal, cross(v2ToV3, v2 - p)),
+		dot(normal, cross(v3ToV1, v3 - p))
+	); // Not normalised (yet). Does this mean they're not actually barycentric?
+
 	if (!(
-		dot(normal, cross(v1ToV2, v1 - p)) > 0.0 &&
-		dot(normal, cross(v2ToV3, v2 - p)) > 0.0 &&
-		dot(normal, cross(v3ToV1, v3 - p)) > 0.0
+		barycentric[0] > 0.0 &&
+		barycentric[1] > 0.0 &&
+		barycentric[2] > 0.0
 	)) {
-		return planeRaycastMiss;
+		return triangleRaycastMiss;
 	}
-	return PlaneRaycastResult(true, tForDirection / length(startToEnd), normal);
+
+	barycentric /= barycentric[0] + barycentric[1] + barycentric[2];
+
+	return TriangleRaycastResult(true, tForDirection / length(startToEnd), normal, barycentric);
 }
 
 struct ConvexRaycastResult {

@@ -70,6 +70,8 @@ return function(path)
 		triangle.v3 = vec3(v3[1], v3[2], v3[3])
 
 		triangle.colour = {0, 0.5, 1}
+		triangle.reflectivity = 0.4
+		triangle.outlineColour = {1, 1, 1, 0.5}
 
 		triangles[#triangles + 1] = triangle
 	end

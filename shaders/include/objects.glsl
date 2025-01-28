@@ -25,6 +25,8 @@ struct ObjectTriangle { // Not tested against directly
 	vec3 v2;
 	vec3 v3;
 	vec3 colour;
+	float reflectivity;
+	vec4 outlineColour;
 };
 
 // maxSpheres, maxPlanes, etc definitions should be concatenated before

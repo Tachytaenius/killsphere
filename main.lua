@@ -53,8 +53,8 @@ function love.load()
 		velocity = vec3(),
 		orientation = quat(),
 		angularVelocity = vec3(),
-		maxSpeed = 100,
-		acceleration = 300,
+		maxSpeed = 50,
+		acceleration = 150,
 		maxAngularSpeed = 2,
 		angularAcceleration = 10,
 
@@ -70,14 +70,14 @@ function love.load()
 			velocity = vec3(),
 			orientation = quat(),
 			angularVelocity = vec3(),
-			maxSpeed = 100,
-			acceleration = 300,
+			maxSpeed = 50,
+			acceleration = 150,
 			maxAngularSpeed = 2,
 			angularAcceleration = 10,
 
 			fov = math.rad(100),
 			shape = testShipShape,
-			scale = 10
+			scale = 5
 		}
 	end
 end
@@ -134,6 +134,8 @@ local function sendTriangles(set)
 		sceneShader:send(prefix .. "v2", {vec3.components(triangle.v2)})
 		sceneShader:send(prefix .. "v3", {vec3.components(triangle.v3)})
 		sceneShader:sendColor(prefix .. "colour", triangle.colour)
+		sceneShader:send(prefix .. "reflectivity", triangle.reflectivity)
+		sceneShader:sendColor(prefix .. "outlineColour", triangle.outlineColour)
 	end
 end
 
@@ -158,7 +160,9 @@ local function getObjectUniforms(tris)
 				v1 = modelToWorld * triangle.v1,
 				v2 = modelToWorld * triangle.v2,
 				v3 = modelToWorld * triangle.v3,
-				colour = util.shallowClone(triangle.colour)
+				colour = util.shallowClone(triangle.colour),
+				reflectivity = triangle.reflectivity,
+				outlineColour = util.shallowClone(triangle.outlineColour)
 			}
 		end
 	    ::continue::
@@ -209,7 +213,8 @@ local function drawState()
 	sceneShader:send("cameraPosition", {vec3.components(camera.position)})
 	sceneShader:send("cameraForwardVector", {vec3.components(cameraForwardVector)})
 	sceneShader:send("cameraFOV", camera.fov)
-	sceneShader:send("maxRaySegments", 3)
+	sceneShader:send("maxRaySegments", 5)
+	sceneShader:send("outlineThicknessFactor", 0.1 + 0.01 * math.sin(state.time * 10.0))
 	love.graphics.setShader(sceneShader)
 	love.graphics.draw(dummyTexture, 0, 0, 0, outputCanvas:getDimensions())
 

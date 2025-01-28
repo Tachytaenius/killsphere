@@ -28,6 +28,7 @@ uniform vec3 cameraPosition;
 uniform vec3 cameraForwardVector;
 uniform float cameraFOV;
 uniform float arenaRadius;
+uniform float outlineThicknessFactor;
 
 float angleBetween(vec3 a, vec3 b) {
 	return acos(
@@ -52,6 +53,7 @@ struct PhysicalRayHit {
 	float t;
 	vec3 position;
 	vec3 normal;
+	float reflectivity;
 };
 
 void tryNewClosestHit(inout PhysicalRayHit closestForwardHit, PhysicalRayHit newHit) {
@@ -67,7 +69,8 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 		// Don't care variables:
 		0.0,
 		vec3(0.0),
-		vec3(0.0)
+		vec3(0.0),
+		0.0
 	);
 
 	for (int j = 0; j < boundingSphereCount; j++) {
@@ -80,17 +83,23 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 
 		for (int i = boundingSphere.triangleStart; i < boundingSphere.triangleStart + boundingSphere.triangleCount; i++) {
 			ObjectTriangle triangle = objectTriangles[i];
-			PlaneRaycastResult triangleResult = triangleRaycast(triangle.v1, triangle.v2, triangle.v3, rayStart, rayStart + rayDirection);
+			TriangleRaycastResult triangleResult = triangleRaycast(triangle.v1, triangle.v2, triangle.v3, rayStart, rayStart + rayDirection);
 			vec3 position = rayStart + rayDirection * triangleResult.t;
 			vec3 normal = triangleResult.normal;
+			vec3 barycentric = triangleResult.barycentric;
 
+			float outlineFactor = min(min(barycentric[0], barycentric[1]), barycentric[2]) < outlineThicknessFactor ? 1.0 : 0.0;
+			vec3 triangleColourHere = mix(triangle.colour, triangle.outlineColour.rgb, outlineFactor * triangle.outlineColour.a);
+			float outlineReflectivity = 0.0;
+			float triangleReflectivityHere = mix(triangle.reflectivity, outlineReflectivity, outlineFactor);
 			if (triangleResult.hit) {
 				tryNewClosestHit(closestForwardHit, PhysicalRayHit (
 					false,
-					triangle.colour,
+					triangleColourHere,
 					triangleResult.t,
 					position,
-					normal
+					normal,
+					triangleReflectivityHere
 				));
 			}
 		}
@@ -116,10 +125,13 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 
 	vec3 rayPosition = rayStart;
 	vec3 rayDirection = rayStartDirection;
+	float influence = 1.0;
+	int teleports = 0;
+	int maxTeleports = 3;
 	for (int rayBounce = 0; rayBounce < maxRaySegments; rayBounce++) {
 		float teleportFactor = mix(
 			0.5,
-			1.0 / float(2.0 * rayBounce + 1.0),
+			1.0 / float(6.0 * teleports + 1.0),
 			nullificationFactor
 		);
 		PhysicalRayHit closestHit = getClosestHit(rayPosition, rayDirection);
@@ -129,20 +141,40 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 			vec3 hitNormal = normalize(hitPosition);
 			if (dot(rayDirection, hitNormal) > 0.0 || true) {
 				if (
-					mod(abs(hitNormal.x), 0.2) < 0.02 ||
-					mod(abs(hitNormal.y), 0.2) < 0.02 ||
-					mod(abs(hitNormal.z), 0.2) < 0.02
+					mod(abs(hitNormal.x), 0.2) < 0.0075 ||
+					mod(abs(hitNormal.y), 0.2) < 0.0075 ||
+					mod(abs(hitNormal.z), 0.2) < 0.0075
 				) {
-					vec3 boundaryColour = hitNormal * 0.5 + 0.5;
-					outColour = boundaryColour * teleportFactor;
+					// vec3 boundaryColour = hitNormal * 0.5 + 0.5;
+					vec3 boundaryColour = vec3(0.2, 0.0, 0.0);
+					outColour += boundaryColour * teleportFactor * influence;
 					break;
 				}
 				rayPosition = -hitPosition;
-				vec3 directionWind = vec3(0.0, 0.0, 1.0) * rayDirection * nullificationFactor;
+				vec3 directionWind = vec3(0.0, 0.0, 0.5) * rayDirection * nullificationFactor;
 				rayDirection = normalize(rayDirection + directionWind);
+				teleports += 1;
+				if (teleports > maxTeleports) {
+					break;
+				}
 			}
 		} else if (!closestHit.sky) {
-			outColour = closestHit.colour * (max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0)), closestHit.normal)) * 0.75 + 0.25) * teleportFactor;
+			// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
+			float formShadowFactor = dot(normalize(vec3(1.0, 1.0, 1.0)), closestHit.normal) * 0.5 + 0.5;
+
+			vec3 incomingLight = vec3(1.0, 1.0, 1.0) * formShadowFactor;
+			outColour += closestHit.colour * incomingLight * teleportFactor * influence;
+			if (closestHit.reflectivity == 0.0) {
+				break;
+			}
+			if (dot(closestHit.normal, rayDirection) < 0.0) {
+				rayDirection = reflect(rayDirection, closestHit.normal);
+				rayPosition = closestHit.position + rayDirection * 0.0001;
+				influence *= closestHit.reflectivity;
+			}
+		} else {
+			// Sky
+			outColour = closestHit.colour * influence;
 			break;
 		}
 	}

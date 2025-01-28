@@ -2,7 +2,7 @@
 
 return {
 	graphics = {
-		canvasScale = 2,
+		canvasScale = 3,
 		fullscreen = false
 	},
 	controls = {
