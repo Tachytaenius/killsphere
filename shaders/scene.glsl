@@ -1,5 +1,9 @@
 #line 1
 
+float snoise(vec3 p) { // HACK
+	return snoise(vec4(p, 0.0));
+}
+
 const float tau = 6.28318530718;
 
 varying vec3 directionPreNormalise;
@@ -29,6 +33,9 @@ uniform vec3 cameraForwardVector;
 uniform float cameraFOV;
 uniform float arenaRadius;
 uniform float outlineThicknessFactor;
+uniform sampler3D fogScatteranceAbsorption;
+uniform sampler3D fogColour;
+uniform sampler3D fogEmission;
 
 float angleBetween(vec3 a, vec3 b) {
 	return acos(
@@ -45,6 +52,36 @@ float angleBetween(vec3 a, vec3 b) {
 vec3 sampleSky(vec3 direction) {
 	// return (direction * 0.5 + 0.5) * 0.5 + 0.25;
 	return vec3(0.0);
+}
+
+struct FogSample {
+	float scatterance;
+	float absorption;
+	vec3 colour;
+	vec3 emission;
+};
+
+FogSample sampleFog(vec3 position) {
+	vec3 textureCoords = position / arenaRadius * 0.5 + 0.5;
+
+	vec4 scatteranceAbsorptionSample = Texel(fogScatteranceAbsorption, textureCoords);
+	vec4 colourSample = Texel(fogColour, textureCoords);
+	vec4 emissionSample = Texel(fogEmission, textureCoords);
+
+	return FogSample (
+		scatteranceAbsorptionSample[0],
+		scatteranceAbsorptionSample[1],
+		colourSample.rgb,
+		emissionSample.rgb
+	);
+}
+
+vec3 getIncomingLight(vec3 surfacePosition, int ignoreObjectId) {
+	return vec3(1.0); // TODO
+}
+
+vec3 getIncomingLightSurface(vec3 surfacePosition, vec3 surfaceNormal, int ignoreObjectId) {
+	return vec3(1.0); // TODO
 }
 
 struct PhysicalRayHit {
@@ -127,7 +164,7 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	vec3 rayDirection = rayStartDirection;
 	float influence = 1.0;
 	int teleports = 0;
-	int maxTeleports = 3;
+	int maxTeleports = 2;
 	for (int rayBounce = 0; rayBounce < maxRaySegments; rayBounce++) {
 		float teleportFactor = mix(
 			0.5,
@@ -136,8 +173,30 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 		);
 		PhysicalRayHit closestHit = getClosestHit(rayPosition, rayDirection);
 		ConvexRaycastResult arenaBoundaryResult = sphereRaycast(vec3(0.0), arenaRadius, rayPosition, rayPosition + rayDirection);
+		bool arenaBoundaryHit = false;
+		vec3 arenaBoundaryHitPosition;
 		if (arenaBoundaryResult.hit && (closestHit.sky || closestHit.t > arenaBoundaryResult.t2)) {
-			vec3 hitPosition = rayPosition + rayDirection * arenaBoundaryResult.t2;
+			arenaBoundaryHit = true;
+			arenaBoundaryHitPosition = rayPosition + rayDirection * arenaBoundaryResult.t2;
+		}
+		if (!closestHit.sky || arenaBoundaryHit) {
+			vec3 fogStart = rayPosition;
+			vec3 fogEnd = arenaBoundaryHit ? arenaBoundaryHitPosition : closestHit.position;
+			float distancePerSample = 1.0;
+			float fogSamples = ceil(distance(fogStart, fogEnd) / distancePerSample);
+			float stepSize = distance(fogStart, fogEnd) / fogSamples;
+			for (int fogSampleNumber = 0; fogSampleNumber < int(fogSamples); fogSampleNumber++) {
+				float t = float(fogSampleNumber) / fogSamples;
+				vec3 position = mix(fogStart, fogEnd, t);
+				FogSample fogSample = sampleFog(position);
+				float fogExtinction = fogSample.absorption + fogSample.scatterance;
+				outColour += influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position, -1);
+				outColour += influence * fogSample.emission * stepSize;
+				influence *= exp(-fogExtinction * stepSize);
+			}
+		}
+		if (arenaBoundaryHit) {
+			vec3 hitPosition = arenaBoundaryHitPosition;
 			vec3 hitNormal = normalize(hitPosition);
 			if (dot(rayDirection, hitNormal) > 0.0 || true) {
 				if (
@@ -149,33 +208,35 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 					vec3 boundaryColour = vec3(0.2, 0.0, 0.0);
 					outColour += boundaryColour * teleportFactor * influence;
 					break;
+				} else {
+					rayPosition = -hitPosition;
+					vec3 directionWind = vec3(0.0, 0.0, 0.5) * rayDirection * nullificationFactor;
+					rayDirection = normalize(rayDirection + directionWind);
+					teleports += 1;
+					if (teleports > maxTeleports) {
+						break;
+					}
 				}
-				rayPosition = -hitPosition;
-				vec3 directionWind = vec3(0.0, 0.0, 0.5) * rayDirection * nullificationFactor;
-				rayDirection = normalize(rayDirection + directionWind);
-				teleports += 1;
-				if (teleports > maxTeleports) {
-					break;
-				}
-			}
-		} else if (!closestHit.sky) {
-			// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
-			float formShadowFactor = dot(normalize(vec3(1.0, 1.0, 1.0)), closestHit.normal) * 0.5 + 0.5;
-
-			vec3 incomingLight = vec3(1.0, 1.0, 1.0) * formShadowFactor;
-			outColour += closestHit.colour * incomingLight * teleportFactor * influence;
-			if (closestHit.reflectivity == 0.0) {
-				break;
-			}
-			if (dot(closestHit.normal, rayDirection) < 0.0) {
-				rayDirection = reflect(rayDirection, closestHit.normal);
-				rayPosition = closestHit.position + rayDirection * 0.0001;
-				influence *= closestHit.reflectivity;
 			}
 		} else {
-			// Sky
-			outColour = closestHit.colour * influence;
-			break;
+			if (!closestHit.sky) {
+				// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
+				float formShadowFactor = dot(normalize(vec3(1.0, 1.0, 1.0)), closestHit.normal) * 0.5 + 0.5;
+
+				vec3 incomingLight = vec3(1.0, 1.0, 1.0) * formShadowFactor;
+				outColour += closestHit.colour * incomingLight * teleportFactor * influence;
+				if (closestHit.reflectivity == 0.0) {
+					break;
+				} else if (dot(closestHit.normal, rayDirection) < 0.0) {
+					rayDirection = reflect(rayDirection, closestHit.normal);
+					rayPosition = closestHit.position + rayDirection * 0.0001;
+					influence *= closestHit.reflectivity;
+				}
+			} else {
+				// Sky
+				outColour = closestHit.colour * influence;
+				break;
+			}
 		}
 	}
 	return outColour;
