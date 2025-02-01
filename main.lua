@@ -15,11 +15,16 @@ local fogScatteranceAbsorptionCanvas, fogColourCanvas, fogEmissionCanvas
 local dummyTexture
 local sceneShader
 local tickFogShader
+local drawLaserShader
 
-local fogTextureCoordScale
+local fogDistancePerDatum = 2 -- Higher means lower resolution fog
+local fogSampleCountMultiplier = 2 -- Higher means more samples per ray
 local lastUpdateDt
 local tickFogMode
-local tickFogModeCount = 6
+local tickFogModeCount = 6 -- This is not a setting to be tweaked. Tick fog's algorithm cycles between XYZ modes and then offset XYZ modes
+local tickFogFrameskipCounter
+local tickFogFrameskip = 4 -- Higher numbers mean more frames between fog ticks, 1 means ticking every frame
+local lastTickFogDrawTime
 
 local state
 
@@ -51,7 +56,7 @@ function love.load()
 
 	state = {}
 	state.time = 0
-	state.worldRadius = 250
+	state.worldRadius = 100
 	state.paused = false
 	state.player = {
 		type = "ship",
@@ -74,7 +79,7 @@ function love.load()
 			type = "ship",
 			allegience = "enemy",
 
-			position = vec3(20),
+			position = vec3(0, 0, 20),
 			velocity = vec3(),
 			orientation = quat(),
 			angularVelocity = vec3(),
@@ -85,12 +90,14 @@ function love.load()
 
 			fov = math.rad(100),
 			shape = testShipShape,
-			scale = 5
+			scale = 2
 		}
 	end
 
-	fogTextureCoordScale = 2
-	local fogTextureSideLength = math.floor(state.worldRadius * 2.0 / fogTextureCoordScale)
+	local fogTextureSideLength = math.floor(state.worldRadius * 2.0 / fogDistancePerDatum)
+
+	-- Colour is filtered manually so that voxels(?) without any scatterance don't influence anything during raytracing
+
 	fogScatteranceAbsorptionCanvas = love.graphics.newCanvas(fogTextureSideLength, fogTextureSideLength, fogTextureSideLength, {
 		type = "volume",
 		computewrite = true,
@@ -98,20 +105,21 @@ function love.load()
 	})
 	fogScatteranceAbsorptionCanvas:setWrap("clamp", "clamp", "clamp")
 	fogScatteranceAbsorptionCanvas:setFilter("linear", "linear")
+
 	fogColourCanvas = love.graphics.newCanvas(fogTextureSideLength, fogTextureSideLength, fogTextureSideLength, {
 		type = "volume",
 		computewrite = true,
-		format = "rgba8"
+		format = "rgba16f"
 	})
 	fogColourCanvas:setWrap("clamp", "clamp", "clamp")
-	fogColourCanvas:setFilter("linear", "linear")
+
 	fogEmissionCanvas = love.graphics.newCanvas(fogTextureSideLength, fogTextureSideLength, fogTextureSideLength, {
 		type = "volume",
 		computewrite = true,
 		format = "rgba16f"
 	})
 	fogEmissionCanvas:setWrap("clamp", "clamp", "clamp")
-	fogEmissionCanvas:setFilter("linear", "linear")
+	fogScatteranceAbsorptionCanvas:setFilter("linear", "linear")
 
 	local initialiseFogShader = love.graphics.newComputeShader(
 		love.filesystem.read("shaders/include/simplex4d.glsl") ..
@@ -119,12 +127,19 @@ function love.load()
 	)
 	initialiseFogShader:send("fogScatteranceAbsorption", fogScatteranceAbsorptionCanvas)
 	initialiseFogShader:send("fogColour", fogColourCanvas)
+	-- initialiseFogShader:send("fogEmission", fogEmissionCanvas)
 	initialiseFogShader:send("worldRadius", state.worldRadius)
-	local groupCount = math.ceil(fogTextureSideLength ^ 3 / initialiseFogShader:getLocalThreadgroupSize())
-	love.graphics.dispatchThreadgroups(initialiseFogShader, groupCount)
+	local groupCount = math.ceil(fogTextureSideLength / initialiseFogShader:getLocalThreadgroupSize())
+	love.graphics.dispatchThreadgroups(initialiseFogShader, groupCount, groupCount, groupCount)
 
-	tickFogShader = love.graphics.newComputeShader("shaders/compute/tickFog.glsl")
+	tickFogShader = love.graphics.newComputeShader(
+		love.filesystem.read("shaders/include/simplex4d.glsl") ..
+		love.filesystem.read("shaders/compute/tickFog.glsl")
+	)
 	tickFogMode = 0
+	tickFogFrameskipCounter = 0
+
+	drawLaserShader = love.graphics.newComputeShader("shaders/compute/drawLaser.glsl")
 end
 
 local function updateState(dt)
@@ -152,6 +167,29 @@ local function updateState(dt)
 		-- TODO: Way better movement system
 		local targetAngularVelocity = util.normaliseOrZero(rotation) * player.maxAngularSpeed
 		player.angularVelocity = util.moveVectorToTarget(player.angularVelocity, targetAngularVelocity, player.angularAcceleration, dt)
+
+		if love.keyboard.isDown("space") then
+			local num = 2
+			for i = 0, num - 1 do
+				local x = util.lerp(-5, 5, i / (num - 1))
+				local relativeOffset = vec3(x, -5, 0)
+				local rotation = player.orientation
+				local laserStart = vec3.clone(player.position + vec3.rotate(relativeOffset, rotation))
+				local laserLength = 100
+				local laserDirection = vec3.rotate(consts.forwardVector, rotation)
+				local laserEnd = laserStart + laserLength * laserDirection
+				local laserSteps = 1024
+				drawLaserShader:send("fogEmission", fogEmissionCanvas)
+				drawLaserShader:send("worldRadius", state.worldRadius)
+				drawLaserShader:send("lineStart", {vec3.components(laserStart)})
+				drawLaserShader:send("lineEnd", {vec3.components(laserEnd)})
+				drawLaserShader:send("lineSteps", laserSteps)
+				local r, g, b = 0.1, 1, 1
+				local strength = 200
+				drawLaserShader:send("lineColour", {r * strength * dt, g * strength * dt, b * strength * dt})
+				love.graphics.dispatchThreadgroups(drawLaserShader, math.ceil(laserSteps / drawLaserShader:getLocalThreadgroupSize()))
+			end
+		end
 	end
 
 	player.position = player.position + player.velocity * dt
@@ -236,6 +274,8 @@ local function sendObjects()
 end
 
 local function drawState(lastUpdateDt)
+	local drawTime = state.time - lastUpdateDt
+
 	local camera = state.player
 
 	local worldToCamera = mat4.camera(camera.position, camera.orientation)
@@ -264,22 +304,41 @@ local function drawState(lastUpdateDt)
 	sceneShader:send("fogScatteranceAbsorption", fogScatteranceAbsorptionCanvas)
 	sceneShader:send("fogColour", fogColourCanvas)
 	sceneShader:send("fogEmission", fogEmissionCanvas)
+	sceneShader:send("fogDistancePerSample", fogDistancePerDatum / fogSampleCountMultiplier)
 	love.graphics.setShader(sceneShader)
+	-- sceneShader:send("bayerMatrixSize", 8)
+	-- sceneShader:send("bayerMatrix", love.graphics.newImage("bayer8.png"))
 	love.graphics.draw(dummyTexture, 0, 0, 0, outputCanvas:getDimensions())
 
-	tickFogShader:send("fogScatteranceAbsorption", fogScatteranceAbsorptionCanvas)
-	-- tickFogShader:send("fogColour", fogColourCanvas)
-	-- tickFogShader:send("worldRadius", state.worldRadius)
-	tickFogShader:send("dt", lastUpdateDt)
-	tickFogShader:send("scatteranceDifferenceDecay", 6)
-	tickFogShader:send("absorptionDifferenceDecay", 6)
-	tickFogShader:send("scatteranceDecay", 1)
-	tickFogShader:send("absorptionDecay", 1)
-	tickFogShader:send("tickFogMode", tickFogMode)
-	local fogTextureSideLength = fogScatteranceAbsorptionCanvas:getWidth()
-	local groupCount = math.ceil(fogTextureSideLength ^ 3 / 1 / tickFogShader:getLocalThreadgroupSize())
-	love.graphics.dispatchThreadgroups(tickFogShader, groupCount)
-	tickFogMode = (tickFogMode + 1) % tickFogModeCount
+	tickFogFrameskipCounter = (tickFogFrameskipCounter + 1) % tickFogFrameskip
+	if tickFogFrameskipCounter == 0 then
+		tickFogShader:send("fogScatteranceAbsorption", fogScatteranceAbsorptionCanvas)
+		tickFogShader:send("fogEmission", fogEmissionCanvas)
+		tickFogShader:send("fogColour", fogColourCanvas)
+		tickFogShader:send("worldRadius", state.worldRadius)
+		tickFogShader:send("dt", lastTickFogDrawTime and (drawTime - lastTickFogDrawTime) or lastUpdateDt)
+		tickFogShader:send("time", drawTime)
+		tickFogShader:send("scatteranceDifferenceDecay", 2)
+		tickFogShader:send("absorptionDifferenceDecay", 2)
+		tickFogShader:send("emissionDifferenceDecay", 2)
+		tickFogShader:send("colourDifferenceDecay", 2)
+		tickFogShader:send("scatteranceDecay", 0.5)
+		tickFogShader:send("absorptionDecay", 0.5)
+		tickFogShader:send("emissionDecay", 3)
+		tickFogShader:send("tickFogMode", tickFogMode)
+		tickFogShader:send("fogCloudPositionScale", 0.2)
+		tickFogShader:send("fogCloudTimeRate", 0.05)
+		tickFogShader:send("fogCloudPower", 0.001)
+		local fogTextureSideLength = fogScatteranceAbsorptionCanvas:getWidth()
+		local w, h, d = tickFogShader:getLocalThreadgroupSize()
+		love.graphics.dispatchThreadgroups(tickFogShader,
+			math.ceil(fogTextureSideLength / w),
+			math.ceil(fogTextureSideLength / h),
+			math.ceil(fogTextureSideLength / (d * 2))
+		)
+		tickFogMode = (tickFogMode + 1) % tickFogModeCount
+		lastTickFogDrawTime = drawTime
+	end
 
 	love.graphics.setShader()
 	love.graphics.setCanvas()
@@ -291,4 +350,5 @@ function love.draw()
 		(love.graphics.getWidth() - consts.canvasWidth * settings.graphics.canvasScale) / 2,
 		(love.graphics.getHeight() - consts.canvasHeight * settings.graphics.canvasScale) / 2
 	love.graphics.draw(outputCanvas, x, y, 0, settings.graphics.canvasScale)
+	love.graphics.print(love.timer.getFPS())
 end

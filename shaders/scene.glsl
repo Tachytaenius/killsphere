@@ -36,6 +36,7 @@ uniform float outlineThicknessFactor;
 uniform sampler3D fogScatteranceAbsorption;
 uniform sampler3D fogColour;
 uniform sampler3D fogEmission;
+uniform float fogDistancePerSample;
 
 float angleBetween(vec3 a, vec3 b) {
 	return acos(
@@ -62,11 +63,14 @@ struct FogSample {
 };
 
 FogSample sampleFog(vec3 position) {
+	ivec3 whd = textureSize(fogScatteranceAbsorption, 0);
 	vec3 textureCoords = position / arenaRadius * 0.5 + 0.5;
+	ivec3 textureCoordsInt = ivec3(vec3(whd) * textureCoords);
 
+	// TODO: Filter colour and emission by adding scatterance into the weighted averaging so that you don't have to deal with no-scattering voxels of colour in the filtering
 	vec4 scatteranceAbsorptionSample = Texel(fogScatteranceAbsorption, textureCoords);
-	vec4 colourSample = Texel(fogColour, textureCoords);
-	vec4 emissionSample = Texel(fogEmission, textureCoords);
+	vec4 colourSample = texelFetch(fogColour, textureCoordsInt, 0);
+	vec4 emissionSample = texelFetch(fogEmission, textureCoordsInt, 0);
 
 	return FogSample (
 		scatteranceAbsorptionSample[0],
@@ -156,7 +160,7 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	vec3 outColour = vec3(0.0);
 
 	float distanceToSurface = arenaRadius - length(cameraPosition);
-	float nullifyStart = arenaRadius * 0.125;
+	float nullifyStart = arenaRadius * 0.2;
 	// float nullificationFactor = min(1, distanceToSurface / nullifyStart);
 	float nullificationFactor = distanceToSurface < nullifyStart ? sin(tau / 4.0 * distanceToSurface / nullifyStart) : 1.0;
 
@@ -168,9 +172,12 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	for (int rayBounce = 0; rayBounce < maxRaySegments; rayBounce++) {
 		float teleportFactor = mix(
 			0.5,
-			1.0 / float(6.0 * teleports + 1.0),
+			1.0 / (10.0 * float(teleports) + 1.0),
 			nullificationFactor
 		);
+		if (teleportFactor == 0.0 || influence == 0.0) {
+			break;
+		}
 		PhysicalRayHit closestHit = getClosestHit(rayPosition, rayDirection);
 		ConvexRaycastResult arenaBoundaryResult = sphereRaycast(vec3(0.0), arenaRadius, rayPosition, rayPosition + rayDirection);
 		bool arenaBoundaryHit = false;
@@ -182,17 +189,21 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 		if (!closestHit.sky || arenaBoundaryHit) {
 			vec3 fogStart = rayPosition;
 			vec3 fogEnd = arenaBoundaryHit ? arenaBoundaryHitPosition : closestHit.position;
-			float distancePerSample = 1.0;
-			float fogSamples = ceil(distance(fogStart, fogEnd) / distancePerSample);
-			float stepSize = distance(fogStart, fogEnd) / fogSamples;
-			for (int fogSampleNumber = 0; fogSampleNumber < int(fogSamples); fogSampleNumber++) {
-				float t = float(fogSampleNumber) / fogSamples;
-				vec3 position = mix(fogStart, fogEnd, t);
+			float totalDistance = distance(fogStart, fogEnd);
+			vec3 direction = normalize(fogEnd - fogStart);
+			float currentDistance = 0.0;
+			int fogStepsCompleted = 0;
+			int maxFogSteps = 1000;
+			while (fogStepsCompleted < maxFogSteps && currentDistance < totalDistance) {
+				float stepSize = min(totalDistance, currentDistance + fogDistancePerSample) - currentDistance;
+				vec3 position = fogStart + direction * currentDistance;
 				FogSample fogSample = sampleFog(position);
 				float fogExtinction = fogSample.absorption + fogSample.scatterance;
-				outColour += influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position, -1);
-				outColour += influence * fogSample.emission * stepSize;
+				outColour += teleportFactor * influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position, -1);
+				outColour += teleportFactor * influence * fogSample.emission * stepSize;
 				influence *= exp(-fogExtinction * stepSize);
+				currentDistance += stepSize;
+				fogStepsCompleted += 1;
 			}
 		}
 		if (arenaBoundaryHit) {
@@ -234,13 +245,16 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				}
 			} else {
 				// Sky
-				outColour = closestHit.colour * influence;
+				outColour = closestHit.colour * teleportFactor * influence;
 				break;
 			}
 		}
 	}
 	return outColour;
 }
+
+// uniform sampler2D bayerMatrix;
+// uniform int bayerMatrixSize;
 
 vec4 effect(vec4 loveColour, sampler2D image, vec2 textureCoords, vec2 windowCoords) {
 	vec3 direction = normalize(directionPreNormalise);
@@ -251,6 +265,10 @@ vec4 effect(vec4 loveColour, sampler2D image, vec2 textureCoords, vec2 windowCoo
 	}
 
 	vec3 outColour = getRayColour(cameraPosition, direction);
+	// float bayerValue = texelFetch(bayerMatrix, ivec2(int(windowCoords.x) % bayerMatrixSize, int(windowCoords.y) % bayerMatrixSize), 0).r;
+	// float steps = 8.0;
+	// outColour = outColour + bayerValue / steps;
+	// outColour = floor(outColour * steps) / steps;
 	return loveColour * vec4(outColour, 1.0);
 }
 
