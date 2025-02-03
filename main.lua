@@ -23,7 +23,7 @@ local lastUpdateDt
 local tickFogMode
 local tickFogModeCount = 6 -- This is not a setting to be tweaked. Tick fog's algorithm cycles between XYZ modes and then offset XYZ modes
 local tickFogFrameskipCounter
-local tickFogFrameskip = 4 -- Higher numbers mean more frames between fog ticks, 1 means ticking every frame
+local tickFogFrameskip = 4 -- Higher numbers mean more frames between fog ticks, 1 means ticking every frame. Continuous effects will flicker a bit
 local lastTickFogDrawTime
 
 local state
@@ -192,12 +192,24 @@ local function updateState(dt)
 		end
 	end
 
-	player.position = player.position + player.velocity * dt
-	if #player.position >= state.worldRadius then
-		local difference = #player.position - state.worldRadius
-		player.position = -vec3.normalise(player.position) * (state.worldRadius - difference)
+	for _, entity in ipairs(state.entities) do
+		-- Extremely TODO/TEMP:
+		if entity ~= player then
+			local translation = vec3(0, 0, 1)
+			local targetVelocity = vec3.rotate(util.normaliseOrZero(translation), entity.orientation) * entity.maxSpeed
+			entity.velocity = util.moveVectorToTarget(entity.velocity, targetVelocity, entity.acceleration, dt)
+			local rotation = vec3.normalise(vec3(1, 1, 0.2))
+			local targetAngularVelocity = util.normaliseOrZero(rotation) * entity.maxAngularSpeed
+			entity.angularVelocity = util.moveVectorToTarget(entity.angularVelocity, targetAngularVelocity, entity.angularAcceleration, dt)
+		end
+
+		entity.position = entity.position + entity.velocity * dt
+		if #entity.position >= state.worldRadius then
+			local difference = #entity.position - state.worldRadius
+			entity.position = -vec3.normalise(entity.position) * (state.worldRadius - difference)
+		end
+		entity.orientation = quat.normalise(entity.orientation * quat.fromAxisAngle(entity.angularVelocity * dt))
 	end
-	player.orientation = quat.normalise(player.orientation * quat.fromAxisAngle(player.angularVelocity * dt))
 
 	state.time = state.time + dt
 end
@@ -316,7 +328,6 @@ local function drawState(lastUpdateDt)
 		tickFogShader:send("fogEmission", fogEmissionCanvas)
 		tickFogShader:send("fogColour", fogColourCanvas)
 		tickFogShader:send("worldRadius", state.worldRadius)
-		tickFogShader:send("dt", lastTickFogDrawTime and (drawTime - lastTickFogDrawTime) or lastUpdateDt)
 		tickFogShader:send("time", drawTime)
 		tickFogShader:send("scatteranceDifferenceDecay", 2)
 		tickFogShader:send("absorptionDifferenceDecay", 2)
@@ -325,18 +336,32 @@ local function drawState(lastUpdateDt)
 		tickFogShader:send("scatteranceDecay", 0.5)
 		tickFogShader:send("absorptionDecay", 0.5)
 		tickFogShader:send("emissionDecay", 3)
-		tickFogShader:send("tickFogMode", tickFogMode)
 		tickFogShader:send("fogCloudPositionScale", 0.2)
 		tickFogShader:send("fogCloudTimeRate", 0.05)
-		tickFogShader:send("fogCloudPower", 0.001)
+		tickFogShader:send("fogCloudBias", 10)
+		tickFogShader:send("fogCloudOutputScale", 10)
 		local fogTextureSideLength = fogScatteranceAbsorptionCanvas:getWidth()
 		local w, h, d = tickFogShader:getLocalThreadgroupSize()
-		love.graphics.dispatchThreadgroups(tickFogShader,
+		local fogDt = lastTickFogDrawTime and (drawTime - lastTickFogDrawTime) or lastUpdateDt
+		local allModes = true
+		if allModes then
+			fogDt = fogDt / tickFogModeCount
+		end
+		local x, y, z =
 			math.ceil(fogTextureSideLength / w),
 			math.ceil(fogTextureSideLength / h),
 			math.ceil(fogTextureSideLength / (d * 2))
-		)
-		tickFogMode = (tickFogMode + 1) % tickFogModeCount
+		tickFogShader:send("dt", fogDt)
+		if allModes then
+			for i = 0, tickFogModeCount - 1 do
+				tickFogShader:send("tickFogMode", i)
+				love.graphics.dispatchThreadgroups(tickFogShader, x, y, z)
+			end
+		else
+			tickFogMode = (tickFogMode + 1) % tickFogModeCount
+			tickFogShader:send("tickFogMode", tickFogMode)
+			love.graphics.dispatchThreadgroups(tickFogShader, x, y, z)
+		end
 		lastTickFogDrawTime = drawTime
 	end
 

@@ -17,7 +17,8 @@ uniform int tickFogMode;
 uniform float time;
 uniform float fogCloudPositionScale;
 uniform float fogCloudTimeRate;
-uniform float fogCloudPower;
+uniform float fogCloudBias;
+uniform float fogCloudOutputScale;
 
 bool inBounds(ivec3 xyz) {
 	ivec3 whd = imageSize(fogScatteranceAbsorption);
@@ -64,20 +65,19 @@ void computemain() {
 	float aAbsorption = aScatteranceAbsorptionSample[1];
 	vec4 bScatteranceAbsorptionSample = imageLoad(fogScatteranceAbsorption, bCoord);
 	float bScatterance = bScatteranceAbsorptionSample[0];
-	float bAbsorption = bScatteranceAbsorptionSample[1];
+	float bAbsorption = bScatteranceAbsorptionSample[1]; 
 
 	// Get weighting to add cloudy effect
 	vec3 positionMiddle = mix(aPosition, bPosition, 0.5);
-	vec3 currentDirectionPreNormalise = vec3(
-		snoise(vec4(positionMiddle * fogCloudPositionScale, time * fogCloudTimeRate)),
-		snoise(vec4(positionMiddle * fogCloudPositionScale, time * fogCloudTimeRate)),
-		snoise(vec4(positionMiddle * fogCloudPositionScale, time * fogCloudTimeRate))
+	vec3 currentCloudiness = vec3(
+		snoise(vec4(positionMiddle * fogCloudPositionScale, time * fogCloudTimeRate)) * fogCloudOutputScale,
+		snoise(vec4(positionMiddle * fogCloudPositionScale, time * fogCloudTimeRate)) * fogCloudOutputScale,
+		snoise(vec4(positionMiddle * fogCloudPositionScale, time * fogCloudTimeRate)) * fogCloudOutputScale
 	);
-	vec3 currentDirection = length(currentDirectionPreNormalise) > 0.0 ? normalize(currentDirectionPreNormalise) : currentDirectionPreNormalise;
 	vec3 movementDirection = vec3(0.0);
 	movementDirection[modeAxisNumber] = 1.0;
-	float dotResult = dot(currentDirection, movementDirection);
-	float cloudinessAOrB = pow(min(1.0, abs(dotResult)), fogCloudPower) * sign(dotResult) * 0.5 + 0.5;
+	float dotResult = dot(currentCloudiness, movementDirection);
+	float cloudinessAOrB = sign(dotResult) * (1.0 - 1.0 / (fogCloudBias * abs(dotResult) + 1.0)) * 0.5 + 0.5;
 
 	// Read fog colour for a and b
 	vec3 aColour = imageLoad(fogColour, aCoord).rgb;
