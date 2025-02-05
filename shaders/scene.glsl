@@ -37,6 +37,8 @@ uniform sampler3D fogScatteranceAbsorption;
 uniform sampler3D fogColour;
 uniform sampler3D fogEmission;
 uniform float fogDistancePerSample;
+uniform float ambientLightAmount;
+uniform vec3 ambientLightColour;
 
 float angleBetween(vec3 a, vec3 b) {
 	return acos(
@@ -80,12 +82,72 @@ FogSample sampleFog(vec3 position) {
 	);
 }
 
-vec3 getIncomingLight(vec3 surfacePosition, int ignoreObjectId) {
-	return vec3(1.0); // TODO
+// -1 for no object id
+// bool inShadow(vec3 lightPosition, vec3 surfacePosition, int ignoreObjectId, int ignoreSubObjectId) {
+// 	vec3 rayStart = lightPosition;
+// 	vec3 rayDirection = normalize(surfacePosition - lightPosition);
+// 	float dist = distance(surfacePosition, lightPosition);
+// 	for (int j = 0; j < boundingSphereCount; j++) {
+// 		BoundingSphere boundingSphere = boundingSpheres[j];
+// 		ConvexRaycastResult boundingSphereResult = sphereRaycast(boundingSphere.position, boundingSphere.radius, rayStart, rayStart + rayDirection);
+// 		if (!boundingSphereResult.hit) {
+// 			// TODO: Also check t stuff (if needed)
+// 			continue;
+// 		}
+
+// 		for (int i = boundingSphere.triangleStart; i < boundingSphere.triangleStart + boundingSphere.triangleCount; i++) {
+// 			ObjectTriangle triangle = objectTriangles[i];
+// 			TriangleRaycastResult triangleResult = triangleRaycast(triangle.v1, triangle.v2, triangle.v3, rayStart, rayStart + rayDirection);
+// 			if (triangleResult.hit && 0.0 <= triangleResult.t && triangleResult.t <= dist * 0.999) {
+// 				return true;
+// 			}
+// 		}
+// 	}
+// 	return false;
+// }
+
+bool inShadow(int i, vec3 lightPosition, vec3 position) {
+	vec3 lightToPosition = position - lightPosition;
+	float dist = length(lightToPosition);
+	float shadowMapValue = Texel(lightShadowMaps[i], lightToPosition).r;
+	if (shadowMapValue < 0.0) {
+		return false;
+	}
+	return shadowMapValue < dist;
 }
 
-vec3 getIncomingLightSurface(vec3 surfacePosition, vec3 surfaceNormal, int ignoreObjectId) {
-	return vec3(1.0); // TODO
+vec3 getIncomingLight(vec3 position) { // , int ignoreObjectId, int ignoreSubObjectId) {
+	vec3 incomingLight = vec3(0.0);
+	for (int lightI = 0; lightI < lightCount; lightI++) {
+		Light light = lights[lightI];
+		// if (inShadow(light.position, position, ignoreObjectId, ignoreSubObjectId)) {
+		// 	continue;
+		// }
+		if (inShadow(lightI, light.position, position)) {
+			continue;
+		}
+		vec3 positionToLight = light.position - position;
+		incomingLight += light.colour * light.intensity * pow(max(0.01, length(positionToLight)), -2.0);
+	}
+	return incomingLight + ambientLightAmount * ambientLightColour;
+}
+
+vec3 getIncomingLightSurface(vec3 surfacePosition, vec3 surfaceNormal) { // , int ignoreObjectId, int ignoreSubObjectId) {
+	vec3 incomingLight = vec3(0.0);
+	for (int lightI = 0; lightI < lightCount; lightI++) {
+		Light light = lights[lightI];
+		// if (inShadow(light.position, surfacePosition, ignoreObjectId, ignoreSubObjectId)) {
+		// 	continue;
+		// }
+		if (inShadow(lightI, light.position, surfacePosition + surfaceNormal * 0.1)) {
+			continue;
+		}
+		vec3 positionToLight = light.position - surfacePosition;
+		float formShadowFactor = max(0.0, dot(surfaceNormal, normalize(positionToLight)));
+		// float formShadowFactor = dot(surfaceNormal, normalize(positionToLight)) * 0.5 + 0.5;
+		incomingLight += light.colour * light.intensity * pow(max(0.01, length(positionToLight)), -2.0) * formShadowFactor;
+	}
+	return incomingLight + ambientLightAmount * ambientLightColour;
 }
 
 struct PhysicalRayHit {
@@ -204,7 +266,7 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				float fogExtinction = fogSample.absorption + fogSample.scatterance;
 				float currentTotalDistance = distanceTraversedPrior + currentDistance;
 				float rayEndDistance = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-				outColour += rayEndDistance * teleportFactor * influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position, -1);
+				outColour += rayEndDistance * teleportFactor * influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position);
 				outColour += rayEndDistance * teleportFactor * influence * fogSample.emission * stepSize;
 				influence *= exp(-fogExtinction * stepSize);
 				currentDistance += stepSize;
@@ -240,8 +302,7 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 		} else {
 			if (!closestHit.sky) {
 				// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
-				float formShadowFactor = dot(normalize(vec3(1.0, 1.0, 1.0)), closestHit.normal) * 0.5 + 0.5;
-				vec3 incomingLight = vec3(1.0, 1.0, 1.0) * formShadowFactor;
+				vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
 				float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
 				float rayEndDistance = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
 				outColour += closestHit.colour * incomingLight * teleportFactor * influence;

@@ -29,6 +29,12 @@ struct ObjectTriangle { // Not tested against directly
 	vec4 outlineColour;
 };
 
+struct Light {
+	float intensity;
+	vec3 colour;
+	vec3 position;
+};
+
 // maxSpheres, maxPlanes, etc definitions should be concatenated before
 
 uniform int sphereCount;
@@ -42,3 +48,7 @@ uniform BoundingSphere[maxBoundingSpheres] boundingSpheres;
 
 uniform int objectTriangleCount;
 uniform ObjectTriangle[maxObjectTriangles] objectTriangles;
+
+uniform int lightCount;
+uniform Light[maxLights] lights;
+uniform samplerCube[maxLights] lightShadowMaps;

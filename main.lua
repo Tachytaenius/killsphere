@@ -16,9 +16,11 @@ local dummyTexture
 local sceneShader
 local tickFogShader
 local drawLaserShader
+local lightShadowMaps
+local shadowMapShader
 
 local fogDistancePerDatum = 2 -- Higher means lower resolution fog
-local fogSampleCountMultiplier = 2 -- Higher means more samples per ray
+local fogSampleCountMultiplier = 1.5 -- Higher means more samples per ray
 local lastUpdateDt
 local tickFogMode
 local tickFogModeCount = 6 -- This is not a setting to be tweaked. Tick fog's algorithm cycles between XYZ modes and then offset XYZ modes
@@ -46,6 +48,7 @@ function love.load()
 		"const int maxPlanes = " .. consts.maxPlanes .. ";\n" ..
 		"const int maxBoundingSpheres = " .. consts.maxBoundingSpheres .. ";\n" ..
 		"const int maxObjectTriangles = " .. consts.maxObjectTriangles .. ";\n" ..
+		"const int maxLights = " .. consts.maxLights .. ";\n" ..
 		love.filesystem.read("shaders/include/objects.glsl") ..
 
 		love.filesystem.read("shaders/scene.glsl")
@@ -57,6 +60,8 @@ function love.load()
 	state = {}
 	state.time = 0
 	state.worldRadius = 100
+	state.ambientLightAmount = 0.02
+	state.ambientLightColour = {1, 1, 1}
 	state.paused = false
 	state.player = {
 		type = "ship",
@@ -83,16 +88,23 @@ function love.load()
 			velocity = vec3(),
 			orientation = quat(),
 			angularVelocity = vec3(),
-			maxSpeed = 50,
-			acceleration = 150,
-			maxAngularSpeed = 2,
-			angularAcceleration = 10,
+			maxSpeed = 1,
+			acceleration = 2,
+			maxAngularSpeed = 0.1,
+			angularAcceleration = 0.2,
 
 			fov = math.rad(100),
 			shape = testShipShape,
 			scale = 2
 		}
 	end
+	state.entities[#state.entities + 1] = {
+		type = "light",
+		position = vec3(0, 0, 0),
+		velocity = vec3(0, 0.05, 0),
+		lightColour = {1, 0.5, 0.5},
+		lightIntensity = 400
+	}
 
 	local fogTextureSideLength = math.floor(state.worldRadius * 2.0 / fogDistancePerDatum)
 
@@ -101,7 +113,8 @@ function love.load()
 	fogScatteranceAbsorptionCanvas = love.graphics.newCanvas(fogTextureSideLength, fogTextureSideLength, fogTextureSideLength, {
 		type = "volume",
 		computewrite = true,
-		format = "rg16f"
+		format = "rg16f",
+		linear = true
 	})
 	fogScatteranceAbsorptionCanvas:setWrap("clamp", "clamp", "clamp")
 	fogScatteranceAbsorptionCanvas:setFilter("linear", "linear")
@@ -116,7 +129,8 @@ function love.load()
 	fogEmissionCanvas = love.graphics.newCanvas(fogTextureSideLength, fogTextureSideLength, fogTextureSideLength, {
 		type = "volume",
 		computewrite = true,
-		format = "rgba16f"
+		format = "rgba16f",
+		linear = true -- TODO: Mixing colour and amount might need handling
 	})
 	fogEmissionCanvas:setWrap("clamp", "clamp", "clamp")
 	fogScatteranceAbsorptionCanvas:setFilter("linear", "linear")
@@ -140,6 +154,16 @@ function love.load()
 	tickFogFrameskipCounter = 0
 
 	drawLaserShader = love.graphics.newComputeShader("shaders/compute/drawLaser.glsl")
+
+	shadowMapShader = love.graphics.newShader("shaders/shadowMap.glsl")
+	lightShadowMaps = {}
+	for i = 1, consts.maxLights do
+		lightShadowMaps[i] = love.graphics.newCanvas(consts.shadowMapSideLength, consts.shadowMapSideLength, {
+			type = "cube",
+			format = "r32f",
+			linear = true
+		})
+	end
 end
 
 local function updateState(dt)
@@ -194,7 +218,7 @@ local function updateState(dt)
 
 	for _, entity in ipairs(state.entities) do
 		-- Extremely TODO/TEMP:
-		if entity ~= player then
+		if entity ~= player and entity.type == "ship" then
 			local translation = vec3(0, 0, 1)
 			local targetVelocity = vec3.rotate(util.normaliseOrZero(translation), entity.orientation) * entity.maxSpeed
 			entity.velocity = util.moveVectorToTarget(entity.velocity, targetVelocity, entity.acceleration, dt)
@@ -208,7 +232,9 @@ local function updateState(dt)
 			local difference = #entity.position - state.worldRadius
 			entity.position = -vec3.normalise(entity.position) * (state.worldRadius - difference)
 		end
-		entity.orientation = quat.normalise(entity.orientation * quat.fromAxisAngle(entity.angularVelocity * dt))
+		if entity.orientation then
+			entity.orientation = quat.normalise(entity.orientation * quat.fromAxisAngle(entity.angularVelocity * dt))
+		end
 	end
 
 	state.time = state.time + dt
@@ -236,34 +262,42 @@ local function sendTriangles(set)
 end
 
 local function getObjectUniforms(tris)
-	local spheres = {}
+	local spheres, lights = {}, {}
 	for _, entity in ipairs(state.entities) do
-		if entity == state.player then
-			goto continue
-		end
-		if not entity.shape then
-			goto continue
-		end
-		spheres[#spheres + 1] = {
-			position = entity.position,
-			radius = entity.scale * entity.shape.radius,
-			triangleStart = #tris, -- Starts at 0
-			triangleCount = #entity.shape.triangles
-		}
-		local modelToWorld = mat4.transform(entity.position, entity.orientation, entity.scale)
-		for _, triangle in ipairs(entity.shape.triangles) do
-			tris[#tris + 1] = {
-				v1 = modelToWorld * triangle.v1,
-				v2 = modelToWorld * triangle.v2,
-				v3 = modelToWorld * triangle.v3,
-				colour = util.shallowClone(triangle.colour),
-				reflectivity = triangle.reflectivity,
-				outlineColour = util.shallowClone(triangle.outlineColour)
+		if entity.type == "light" then
+			lights[#lights + 1] = {
+				position = vec3.clone(entity.position),
+				intensity = entity.lightIntensity,
+				colour = util.shallowClone(entity.lightColour)
 			}
+		else
+			if entity == state.player then
+				goto continue
+			end
+			if not entity.shape then
+				goto continue
+			end
+			spheres[#spheres + 1] = {
+				position = vec3.clone(entity.position),
+				radius = entity.scale * entity.shape.radius,
+				triangleStart = #tris, -- Starts at 0
+				triangleCount = #entity.shape.triangles
+			}
+			local modelToWorld = mat4.transform(entity.position, entity.orientation, entity.scale)
+			for _, triangle in ipairs(entity.shape.triangles) do
+				tris[#tris + 1] = {
+					v1 = modelToWorld * triangle.v1,
+					v2 = modelToWorld * triangle.v2,
+					v3 = modelToWorld * triangle.v3,
+					colour = util.shallowClone(triangle.colour),
+					reflectivity = triangle.reflectivity,
+					outlineColour = util.shallowClone(triangle.outlineColour)
+				}
+			end
 		end
 	    ::continue::
 	end
-	return spheres
+	return spheres, lights
 end
 
 local function sendBoundingSpheres(set)
@@ -278,11 +312,69 @@ local function sendBoundingSpheres(set)
 	end
 end
 
+local function sendLights(set)
+	sceneShader:send("lightCount", #set)
+	for i, light in ipairs(set) do
+		local glslI = i - 1
+		local prefix = "lights[" .. glslI .. "]."
+		sceneShader:send(prefix .. "position", {vec3.components(light.position)})
+		sceneShader:sendColor(prefix .. "colour", light.colour)
+		sceneShader:send(prefix .. "intensity", light.intensity)
+	end
+end
+
 local function sendObjects()
 	local trisSet = {}
-	local objectBoundingSpheres = getObjectUniforms(trisSet)
+	local objectBoundingSpheres, lights = getObjectUniforms(trisSet)
 	sendTriangles(trisSet)
 	sendBoundingSpheres(objectBoundingSpheres)
+	sendLights(lights)
+end
+
+local function drawAndSendLightShadowMaps()
+	love.graphics.push("all")
+	love.graphics.setShader(shadowMapShader)
+	love.graphics.setBlendMode("darken", "premultiplied") -- Closer is saved
+	local i = 1
+	for _, entity in ipairs(state.entities) do
+		if entity.type ~= "light" then
+			goto continue
+		end
+		local cameraToClip = mat4.perspectiveLeftHanded(
+			1,
+			consts.tau / 4,
+			consts.farPlaneDistance,
+			consts.nearPlaneDistance
+		)
+		shadowMapShader:send("cameraPosition", {vec3.components(entity.position)})
+		for side, orientation in ipairs(consts.cubemapOrientationsYFlip) do
+			love.graphics.setCanvas(lightShadowMaps[i], side)
+			love.graphics.clear(math.huge, 0, 0)
+			local worldToCamera = mat4.camera(
+				entity.position,
+				orientation
+			)
+			local worldToClip = cameraToClip * worldToCamera
+			for _, entityToDraw in ipairs(state.entities) do
+				if not entityToDraw.shape then
+					goto continue
+				end
+				local modelToWorld = mat4.transform(entityToDraw.position, entityToDraw.orientation, entityToDraw.scale)
+				local modelToClip = worldToClip * modelToWorld
+				shadowMapShader:send("modelToWorld", {mat4.components(modelToWorld)})
+				shadowMapShader:send("modelToClip", {mat4.components(modelToClip)})
+				love.graphics.draw(entityToDraw.shape.mesh)
+			    ::continue::
+			end
+		end
+		i = i + 1
+		if i > consts.maxLights then
+			break
+		end
+	    ::continue::
+	end
+	sceneShader:send("lightShadowMaps", unpack(lightShadowMaps))
+	love.graphics.pop()
 end
 
 local function drawState(lastUpdateDt)
@@ -306,6 +398,7 @@ local function drawState(lastUpdateDt)
 	love.graphics.clear()
 
 	sendObjects()
+	drawAndSendLightShadowMaps()
 	sceneShader:send("arenaRadius", state.worldRadius)
 	sceneShader:send("clipToSky", {mat4.components(clipToSky)})
 	sceneShader:send("cameraPosition", {vec3.components(camera.position)})
@@ -317,6 +410,8 @@ local function drawState(lastUpdateDt)
 	sceneShader:send("fogColour", fogColourCanvas)
 	sceneShader:send("fogEmission", fogEmissionCanvas)
 	sceneShader:send("fogDistancePerSample", fogDistancePerDatum / fogSampleCountMultiplier)
+	sceneShader:sendColor("ambientLightColour", state.ambientLightColour)
+	sceneShader:send("ambientLightAmount", state.ambientLightAmount)
 	love.graphics.setShader(sceneShader)
 	-- sceneShader:send("bayerMatrixSize", 8)
 	-- sceneShader:send("bayerMatrix", love.graphics.newImage("bayer8.png"))
