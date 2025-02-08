@@ -49,4 +49,10 @@ consts.cubemapOrientationsYFlip[3], consts.cubemapOrientationsYFlip[4] = consts.
 
 consts.shadowMapSideLength = 1024
 
+consts.fogDistancePerDatum = 1.5 -- Higher means lower resolution fog
+consts.fogSampleCountMultiplier = 2 -- Higher means more samples per ray
+consts.tickFogModeCount = 6 -- This is not a setting to be tweaked. Tick fog's algorithm cycles between XYZ modes and then offset XYZ modes
+consts.tickFogSkipCycleLength = 8 -- Higher numbers mean fog ticking is spread out more over time, 1 means ticking every frame. Continuous effects will flicker a bit
+consts.fogDoAllModes = true -- Go through both sets of XYZ modes in one frame
+
 return consts

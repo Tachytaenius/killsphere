@@ -5,7 +5,7 @@ local vec3 = require("lib.mathsies").vec3
 local mul = consts.loadObjCoordMultiplier
 
 return function(path)
-	local geometry = {}
+	local position = {}
 	local uv = {}
 	local normal = {}
 	local outVerts = {}
@@ -18,7 +18,7 @@ return function(path)
 			if item then
 				if isTri then
 					local iterator = word:gmatch("%d+")
-					local v = geometry[tonumber(iterator())]
+					local v = position[tonumber(iterator())]
 					local vt = uv[tonumber(iterator())]
 					local vn = normal[tonumber(iterator())]
 
@@ -42,7 +42,7 @@ return function(path)
 				break
 			elseif word == "v" then
 				item = {}
-				geometry[#geometry+1] = item
+				position[#position+1] = item
 			elseif word == "vt" then
 				item = {}
 				uv[#uv+1] = item
@@ -77,7 +77,7 @@ return function(path)
 	end
 
 	return {
-		geometry = geometry,
+		position = position,
 		uv = uv,
 		normal = normal,
 		vertices = outVerts,
