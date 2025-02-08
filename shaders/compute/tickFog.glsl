@@ -19,6 +19,8 @@ uniform float fogCloudPositionScale;
 uniform float fogCloudTimeRate;
 uniform float fogCloudBias;
 uniform float fogCloudOutputScale;
+uniform ivec3 workGroupIdMultiply;
+uniform ivec3 workGroupIdAdd;
 
 bool inBounds(ivec3 xyz) {
 	ivec3 whd = imageSize(fogScatteranceAbsorption);
@@ -38,10 +40,11 @@ void computemain() {
 	int modeAxisNumber = int(mod(tickFogMode, 3));
 	int otherAxisA = int(mod(tickFogMode + 1, 3));
 	int otherAxisB = int(mod(tickFogMode + 2, 3));
+	uvec3 invocationModified = (gl_WorkGroupID * workGroupIdMultiply + workGroupIdAdd) * gl_WorkGroupSize + gl_LocalInvocationID;
 	ivec3 xyz;
-	xyz[modeAxisNumber] = int(gl_GlobalInvocationID.z) * 2;
-	xyz[otherAxisA] = int(gl_GlobalInvocationID.x);
-	xyz[otherAxisB] = int(gl_GlobalInvocationID.y);
+	xyz[modeAxisNumber] = int(invocationModified.z) * 2;
+	xyz[otherAxisA] = int(invocationModified.x);
+	xyz[otherAxisB] = int(invocationModified.y);
 	if (tickFogMode >= 3) {
 		xyz[modeAxisNumber] += 1;
 	};
