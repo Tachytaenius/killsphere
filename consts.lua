@@ -4,9 +4,9 @@ local quat = mathsies.quat
 
 local consts = {}
 
-consts.loveIdentity = "spaceshot"
+consts.loveIdentity = "killsphere"
 consts.loveVersion = "12.0"
-consts.windowTitle = "Spaceshot"
+consts.windowTitle = "† †  K  I  L  L  S  P  H  E  R  E  † †"
 
 consts.tau = math.pi * 2
 
