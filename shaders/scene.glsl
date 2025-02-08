@@ -39,6 +39,7 @@ uniform sampler3D fogEmission;
 uniform float fogDistancePerSample;
 uniform float ambientLightAmount;
 uniform vec3 ambientLightColour;
+uniform float time;
 
 float angleBetween(vec3 a, vec3 b) {
 	return acos(
@@ -218,6 +219,22 @@ vec3 multiplyVectorInDirection(vec3 v, vec3 d, float m) { // d should be normali
 	return parallelScaled + perpendicular;
 }
 
+vec3 rgb2hsv(vec3 c) {
+	vec4 k = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	vec4 p = mix(vec4(c.bg, k.wz), vec4(c.gb, k.xy), step(c.b, c.g));
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+	float d = q.x - min(q.w, q.y);
+	float e = 1.0e-10;
+	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+	vec4 k = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	vec3 p = abs(fract(c.xxx + k.xyz) * 6.0 - k.www);
+	return c.z * mix(k.xxx, clamp(p - k.xxx, 0.0, 1.0), c.y);
+}
+
 vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	vec3 outColour = vec3(0.0);
 
@@ -226,18 +243,21 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	// float nullificationFactor = min(1, distanceToSurface / nullifyStart);
 	float nullificationFactor = distanceToSurface < nullifyStart ? sin(tau / 2.0 * (distanceToSurface / nullifyStart - 0.5)) * 0.5 + 0.5 : 1.0;
 
+	int maxTeleports = 2;
+	float lastTeleportVisibilityProportion = 0.25;
+
 	vec3 rayPosition = rayStart;
 	vec3 rayDirection = rayStartDirection;
 	float influence = 1.0;
 	int teleports = 0;
-	int maxTeleports = 3;
 	float distanceTraversedPrior = 0.0; // Before current ray segment
-	float maxLightDistance = arenaRadius * maxTeleports;
-	float lightDistanceFadeStart = arenaRadius * (maxTeleports - 1);
+	float arenaDiameter = 2.0 * arenaRadius;
+	float maxLightDistance = arenaDiameter * (float(maxTeleports + 1) - lastTeleportVisibilityProportion);
+	float lightDistanceFadeStart = arenaDiameter * float(maxTeleports);
 	for (int rayBounce = 0; rayBounce < maxRaySegments; rayBounce++) {
 		float teleportFactor = mix(
 			0.5,
-			pow(1.0 - float(teleports) / float(maxTeleports), 6.0),
+			pow(1.0 - float(teleports) / float(maxTeleports + 1), 2.0),
 			nullificationFactor
 		);
 		if (teleportFactor == 0.0 || influence == 0.0) {
@@ -265,9 +285,12 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				FogSample fogSample = sampleFog(position);
 				float fogExtinction = fogSample.absorption + fogSample.scatterance;
 				float currentTotalDistance = distanceTraversedPrior + currentDistance;
-				float rayEndDistance = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-				outColour += rayEndDistance * teleportFactor * influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position);
-				outColour += rayEndDistance * teleportFactor * influence * fogSample.emission * stepSize;
+				float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
+				if (rayEndFactor <= 0.0) {
+					break;
+				}
+				outColour += rayEndFactor * teleportFactor * influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position);
+				outColour += rayEndFactor * teleportFactor * influence * fogSample.emission * stepSize;
 				influence *= exp(-fogExtinction * stepSize);
 				currentDistance += stepSize;
 				fogStepsCompleted += 1;
@@ -282,11 +305,11 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 					mod(abs(hitNormal.y), 0.2) < 0.0075 ||
 					mod(abs(hitNormal.z), 0.2) < 0.0075
 				) {
-					// vec3 boundaryColour = hitNormal * 0.5 + 0.5;
-					vec3 boundaryColour = vec3(0.2, 0.0, 0.0);
+					vec3 boundaryColour = hitNormal * 0.5 + 0.5;
+					// vec3 boundaryColour = hsv2rgb(vec3(float(teleports) / float(maxTeleports + 1), 1.0, 1.0));
 					float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, arenaBoundaryHitPosition);
-					float rayEndDistance = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-					outColour += boundaryColour * teleportFactor * influence;
+					float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
+					outColour += boundaryColour * teleportFactor * influence * rayEndFactor;
 					break;
 				} else {
 					distanceTraversedPrior += distance(rayPosition, hitPosition);
@@ -304,8 +327,8 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
 				vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
 				float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
-				float rayEndDistance = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-				outColour += closestHit.colour * incomingLight * teleportFactor * influence;
+				float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
+				outColour += rayEndFactor * closestHit.colour * incomingLight * teleportFactor * influence;
 				if (closestHit.reflectivity == 0.0) {
 					break;
 				} else if (dot(closestHit.normal, rayDirection) < 0.0) {
