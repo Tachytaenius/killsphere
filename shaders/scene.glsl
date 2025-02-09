@@ -41,6 +41,9 @@ uniform float ambientLightAmount;
 uniform vec3 ambientLightColour;
 uniform float time;
 
+const float lightRadius = 0.25;
+const float lightRadiusSizeExtra = 1.25;
+
 float angleBetween(vec3 a, vec3 b) {
 	return acos(
 		clamp( // To prevent NaN
@@ -146,7 +149,7 @@ vec3 getIncomingLightSurface(vec3 surfacePosition, vec3 surfaceNormal) { // , in
 		vec3 positionToLight = light.position - surfacePosition;
 		float formShadowFactor = max(0.0, dot(surfaceNormal, normalize(positionToLight)));
 		// float formShadowFactor = dot(surfaceNormal, normalize(positionToLight)) * 0.5 + 0.5;
-		incomingLight += light.colour * light.intensity * pow(max(0.01, length(positionToLight)), -2.0) * formShadowFactor;
+		incomingLight += light.colour * light.intensity * pow(max(lightRadius, length(positionToLight)), -2.0) * formShadowFactor;
 	}
 	return incomingLight + ambientLightAmount * ambientLightColour;
 }
@@ -279,6 +282,22 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 			float currentDistance = 0.0;
 			int fogStepsCompleted = 0;
 			int maxFogSteps = 1000;
+			// Get lights to check for going directly through
+			Light fogLights[maxLights];
+			int fogLightCount = 0;
+			for (int i = 0; i < lightCount; i++) {
+				Light light = lights[i];
+				ConvexRaycastResult lightRaycastResult = sphereRaycast(light.position, lightRadius + lightRadiusSizeExtra, fogStart, fogStart + fogEnd);
+				if (!lightRaycastResult.hit) {
+					continue;
+				}
+				if (!(0.0 <= lightRaycastResult.t1 && lightRaycastResult.t2 <= 1.0)) {
+					// continue;
+				}
+				fogLights[fogLightCount] = light;
+				fogLightCount += 1;
+			}
+			// Step fog
 			while (fogStepsCompleted < maxFogSteps && currentDistance < totalDistance) {
 				float stepSize = min(totalDistance, currentDistance + fogDistancePerSample) - currentDistance;
 				vec3 position = fogStart + direction * currentDistance;
@@ -289,8 +308,17 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				if (rayEndFactor <= 0.0) {
 					break;
 				}
-				outColour += rayEndFactor * teleportFactor * influence * fogSample.colour * fogSample.scatterance * stepSize * getIncomingLight(position);
-				outColour += rayEndFactor * teleportFactor * influence * fogSample.emission * stepSize;
+				vec3 insideLightsHere = vec3(0.0);
+				for (int i = 0; i < fogLightCount; i++) {
+					Light light = fogLights[i];
+					float extra = 4.0;
+					insideLightsHere += /*light.intensity * */ extra * light.colour * pow(max(0.0, 1.0 - distance(light.position, position) / (lightRadius + lightRadiusSizeExtra)), 4.0);
+				}
+				outColour +=
+					rayEndFactor * teleportFactor * influence * stepSize * (
+						fogSample.colour * fogSample.scatterance * getIncomingLight(position) +
+						fogSample.emission + insideLightsHere
+					);
 				influence *= exp(-fogExtinction * stepSize);
 				currentDistance += stepSize;
 				fogStepsCompleted += 1;
