@@ -24,8 +24,8 @@ end
 
 function graphics:getObjectUniforms(state, tris)
 	local spheres, lights = {}, {}
-	for _, entity in ipairs(state.entities) do
-		if entity.type == "light" then
+	for entity in state.entities:elements() do
+		if entity.class.type == "light" then
 			lights[#lights + 1] = {
 				position = vec3.clone(entity.position),
 				intensity = entity.lightIntensity,
@@ -35,17 +35,18 @@ function graphics:getObjectUniforms(state, tris)
 			-- if entity == state.player then
 			-- 	goto continue
 			-- end
-			if not entity.shape then
+			local shape = entity.class.shape
+			if not shape then
 				goto continue
 			end
 			spheres[#spheres + 1] = {
 				position = vec3.clone(entity.position),
-				radius = entity.shape.geometry.radius,
+				radius = shape.radius,
 				triangleStart = #tris, -- Starts at 0
-				triangleCount = #entity.shape.geometry.triangles
+				triangleCount = #shape.triangles
 			}
 			local modelToWorld = mat4.transform(entity.position, entity.orientation)
-			for _, triangle in ipairs(entity.shape.geometry.triangles) do
+			for _, triangle in ipairs(shape.triangles) do
 				tris[#tris + 1] = {
 					v1 = modelToWorld * triangle.v1,
 					v2 = modelToWorld * triangle.v2,
@@ -99,8 +100,8 @@ function graphics:drawAndSendLightShadowMaps(state)
 	love.graphics.setShader(self.shadowMapShader)
 	love.graphics.setBlendMode("darken", "premultiplied") -- Closer is saved
 	local i = 1
-	for _, entity in ipairs(state.entities) do
-		if entity.type ~= "light" then
+	for entity in state.entities:elements() do
+		if entity.class.type ~= "light" then
 			goto continue
 		end
 		local cameraToClip = mat4.perspectiveLeftHanded(
@@ -118,15 +119,15 @@ function graphics:drawAndSendLightShadowMaps(state)
 				orientation
 			)
 			local worldToClip = cameraToClip * worldToCamera
-			for _, entityToDraw in ipairs(state.entities) do
-				if not entityToDraw.shape then
+			for entityToDraw in state.entities:elements() do
+				if not entityToDraw.class.shape then
 					goto continue
 				end
 				local modelToWorld = mat4.transform(entityToDraw.position, entityToDraw.orientation)
 				local modelToClip = worldToClip * modelToWorld
 				self.shadowMapShader:send("modelToWorld", {mat4.components(modelToWorld)})
 				self.shadowMapShader:send("modelToClip", {mat4.components(modelToClip)})
-				love.graphics.draw(entityToDraw.shape.geometry.mesh)
+				love.graphics.draw(entityToDraw.class.shape.mesh)
 			    ::continue::
 			end
 		end

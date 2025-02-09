@@ -13,11 +13,11 @@ return {
 		moveForwards = "w",
 		moveBackwards = "s",
 
-		-- pitchDown = "k",
-		-- pitchUp = "i",
-		-- yawRight = "l",
-		-- yawLeft = "j",
-		-- rollAnticlockwise = "u",
-		-- rollClockwise = "o",
+		pitchDown = "k",
+		pitchUp = "i",
+		yawRight = "l",
+		yawLeft = "j",
+		rollAnticlockwise = "u",
+		rollClockwise = "o"
 	}
 }

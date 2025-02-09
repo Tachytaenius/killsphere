@@ -12,9 +12,9 @@ function graphics:drawState(state, lastUpdateDt)
 
 	local orientation = state.player.orientation
 	local camera = {
-		position = state.player.position + vec3.rotate(state.player.shape.cameraOffset, orientation),
+		position = state.player.position + vec3.rotate(state.player.class.cameraOffset, orientation),
 		orientation = orientation,
-		fov = state.player.fov
+		fov = state.player.class.fov
 	}
 
 	local worldToCamera = mat4.camera(camera.position, camera.orientation)
