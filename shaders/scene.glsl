@@ -238,6 +238,17 @@ vec3 hsv2rgb(vec3 c) {
 	return c.z * mix(k.xxx, clamp(p - k.xxx, 0.0, 1.0), c.y);
 }
 
+vec2 rotate(vec2 v, float a) {
+	float s = sin(a);
+	float c = cos(a);
+	mat2 m = mat2(c, s, -s, c);
+	return m * v;
+}
+
+float pingPong(float x, float height) {
+	return height - abs(height - mod(x, 2.0 * height));
+}
+
 vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	vec3 outColour = vec3(0.0);
 
@@ -328,13 +339,47 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 			vec3 hitPosition = arenaBoundaryHitPosition;
 			vec3 hitNormal = normalize(hitPosition);
 			if (dot(rayDirection, hitNormal) > 0.0 || true) {
+				// bool grid =
+				// 	mod(abs(hitNormal.x), 0.2) < 0.0075 ||
+				// 	mod(abs(hitNormal.y), 0.2) < 0.0075 ||
+				// 	mod(abs(hitNormal.z), 0.2) < 0.0075;
+				vec3 gridIn = hitNormal;
+				float size = 0.2;
+				float edge = size * 0.04;
+				gridIn.xz = rotate(gridIn.xz, pingPong(gridIn.y - size * 0.5, size) * tau * 0.1);
+				vec3 gridV = mod(abs(gridIn), size);
+				float grid = min(min(
+					min(1.0, min((gridV.x - edge) / edge, (size - (gridV.x + edge)) / edge)),
+					min(1.0, min((gridV.y - edge) / edge, (size - (gridV.y + edge)) / edge))),
+					min(1.0, min((gridV.z - edge) / edge, (size - (gridV.z + edge)) / edge))
+				);
+				// grid is between 0 and 1
+
+				float ditherSize = 0.01;
 				if (
-					mod(abs(hitNormal.x), 0.2) < 0.0075 ||
-					mod(abs(hitNormal.y), 0.2) < 0.0075 ||
-					mod(abs(hitNormal.z), 0.2) < 0.0075
+					grid > (
+						mod(hitNormal.x, ditherSize) / ditherSize +
+						mod(hitNormal.y + time * ditherSize * 0.01, ditherSize) / ditherSize +
+						mod(hitNormal.z + time * ditherSize * 0.01 * 3.0, ditherSize) / ditherSize 
+					) / 3.0
 				) {
-					vec3 boundaryColour = hitNormal * 0.5 + 0.5;
+					// vec3 boundaryColour = hitNormal * 0.5 + 0.5;
 					// vec3 boundaryColour = hsv2rgb(vec3(float(teleports) / float(maxTeleports + 1), 1.0, 1.0));
+					float noiseA = snoise(vec4(
+						hitPosition / arenaRadius * 4.0,
+						time * 0.1
+					));
+					float noiseB = pow(
+						// noiseA,
+						mod(noiseA, 0.5),
+						// noiseA * 0.5 + 0.5,
+						1.5
+					);
+					vec3 boundaryColour = mix(
+						noiseB * vec3(0.3, 0.0, 0.0),
+						vec3(0.0, 1.0, 1.0),
+						max(0.0, 1.0 - (noiseA * 0.5 + 0.5) / 0.1)
+					);
 					float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, arenaBoundaryHitPosition);
 					float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
 					outColour += boundaryColour * teleportFactor * influence * rayEndFactor;

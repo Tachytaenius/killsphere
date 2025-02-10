@@ -3,6 +3,7 @@ local vec3 = mathsies.vec3
 local quat = mathsies.quat
 
 local util = require("util")
+local consts = require("consts")
 
 local gameInstance = {}
 
@@ -12,10 +13,20 @@ function gameInstance:handleMotion(dt)
 		entity.position = entity.position + entity.velocity * dt
 		entity.orientation = quat.normalise(entity.orientation * quat.fromAxisAngle(entity.angularVelocity * dt))
 
-		-- Teleport
 		if #entity.position >= state.worldRadius then
-			local difference = #entity.position - state.worldRadius
-			entity.position = -vec3.normalise(entity.position) * (state.worldRadius - difference)
+			-- Teleport
+			-- local difference = #entity.position - state.worldRadius
+			-- entity.position = -vec3.normalise(entity.position) * (state.worldRadius - difference)
+		end
+
+		if entity.class.solid and #entity.position + entity.class.colliderRadius >= state.worldRadius then
+			-- Bounce
+			entity.position = util.limitVectorLength(entity.position, state.worldRadius - entity.class.colliderRadius)
+			local surfaceNormal = -vec3.normalise(entity.position)
+			local parallel = surfaceNormal * vec3.dot(entity.velocity, surfaceNormal)
+			local perpendicular = entity.velocity - parallel
+			local parallellScaled = parallel * -consts.boundarySphereBounciness
+			entity.velocity = parallellScaled + perpendicular
 		end
 	end
 end

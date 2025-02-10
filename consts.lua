@@ -55,4 +55,6 @@ consts.tickFogModeCount = 6 -- This is not a setting to be tweaked. Tick fog's a
 consts.tickFogSkipCycleLength = 8 -- Higher numbers mean fog ticking is spread out more over time, 1 means ticking every frame. Continuous effects will flicker a bit
 consts.fogDoAllModes = true -- Go through both sets of XYZ modes in one frame
 
+consts.boundarySphereBounciness = 0.25
+
 return consts

@@ -13,6 +13,7 @@ TestShip.static.maxAngularSpeed = 2
 TestShip.static.angularAcceleration = 10
 
 TestShip.static.shape = util.loadShapeObj("assets/meshes/testShip.obj")
+TestShip.static.colliderRadius = TestShip.static.shape.radius * 0.5
 TestShip.cameraOffset = vec3(0, 0.5, 0.4)
 TestShip.static.fov = math.rad(100)
 

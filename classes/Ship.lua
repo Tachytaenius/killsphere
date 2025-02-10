@@ -4,6 +4,7 @@ local Entity = require("classes.Entity")
 
 local Ship = class("Ship", Entity)
 
+Ship.static.solid = true
 Ship.static.type = "ship"
 
 function Ship:initialize(args)
