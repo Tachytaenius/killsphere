@@ -82,10 +82,16 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 				position = endPosition,
 				velocity = direction * speed,
 				emissionColour = {1, 0.5, 0.1},
-				emission = 1000,
+				emission = 3000,
 				lifetimeLength = lifetime,
 				timeExisted = 0,
-				emissionFalloff = true
+				emissionFalloff = true,
+
+				draw = true,
+				drawRadius = 0.15,
+				strengthDiameterDivide = true,
+				radiusFalloff = true,
+				drawStrength = 1
 			})
 		end
 	end

@@ -6,7 +6,7 @@ function gameInstance:handleParticles(dt)
 	local state = self.state
 	local particles = state.particles
 	local i = 1
-	while i < particles.size do
+	while i <= particles.size do
 		local particle = particles:get(i)
 
 		local oldPosition = particle.position -- No need to clone

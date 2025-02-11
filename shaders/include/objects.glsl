@@ -35,6 +35,13 @@ struct Light {
 	vec3 position;
 };
 
+struct Particle {
+	float radius;
+	vec3 colour;
+	float strength;
+	vec3 position;
+};
+
 // maxSpheres, maxPlanes, etc definitions should be concatenated before
 
 uniform int sphereCount;
@@ -52,3 +59,6 @@ uniform ObjectTriangle[maxObjectTriangles] objectTriangles;
 uniform int lightCount;
 uniform Light[maxLights] lights;
 uniform samplerCube[maxLights] lightShadowMaps;
+
+uniform int particleCount;
+uniform Particle[maxParticles] particles;

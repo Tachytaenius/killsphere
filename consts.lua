@@ -25,6 +25,7 @@ consts.maxPlanes = 8
 consts.maxBoundingSpheres = 32
 consts.maxObjectTriangles = 256
 consts.maxLights = 8
+consts.maxParticles = 256
 
 consts.loadObjCoordMultiplier = vec3(1, 1, -1) -- Export OBJs from Blender with +Y up and +Z forward -- TODO: Why is this needed?
 consts.objectVertexFormat = {
@@ -56,6 +57,6 @@ consts.tickFogSkipCycleLength = 8 -- Higher numbers mean fog ticking is spread o
 consts.fogDoAllModes = true -- Go through both sets of XYZ modes in one frame
 
 consts.boundarySphereBounciness = 0.25
-consts.gunSparkTimerLength = 1 / 20
+consts.gunSparkTimerLength = 1 / 45
 
 return consts

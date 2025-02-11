@@ -40,6 +40,8 @@ uniform float fogDistancePerSample;
 uniform float ambientLightAmount;
 uniform vec3 ambientLightColour;
 uniform float time;
+uniform sampler2D bayerMatrix;
+uniform int bayerMatrixSize;
 
 const float lightRadius = 0.25;
 const float lightRadiusSizeExtra = 1.25;
@@ -162,6 +164,7 @@ struct PhysicalRayHit {
 	vec3 position;
 	vec3 normal;
 	float reflectivity;
+	vec3 emission;
 };
 
 void tryNewClosestHit(inout PhysicalRayHit closestForwardHit, PhysicalRayHit newHit) {
@@ -178,7 +181,8 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 		0.0,
 		vec3(0.0),
 		vec3(0.0),
-		0.0
+		0.0,
+		vec3(0.0)
 	);
 
 	for (int j = 0; j < boundingSphereCount; j++) {
@@ -207,9 +211,54 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 					triangleResult.t,
 					position,
 					normal,
-					triangleReflectivityHere
-				));
+					triangleReflectivityHere,
+					vec3(0.0)
+				)); 
 			}
+		}
+	}
+
+	// Now try particles between camera and current closest hit. If it's bright enough (with dithering) then we use it. It will be situated at the closest particle hit
+	vec3 particleColour = vec3(0.0);
+	float particlePower = 0.0;
+	bool hitParticle = false;
+	float closestParticleT;
+	for (int i = 0; i < particleCount; i++) {
+		Particle particle = particles[i];
+		ConvexRaycastResult particleRaycast = sphereRaycast(particle.position, particle.radius, rayStart, rayStart + rayDirection);
+		if (!particleRaycast.hit) {
+			continue;
+		}
+		float t1 = max(0.0, particleRaycast.t1);
+		float t2 = particleRaycast.t2;
+		if (!closestForwardHit.sky) {
+			t2 = min(closestForwardHit.t, t2); // If a particle is midway thru the boundary sphere, then it won't be considered. Getting boundary sphere hit result before this code would be better. So, TODO!
+		}
+		if (t2 < t1) {
+			continue;
+		}
+		closestParticleT = hitParticle ? min(t1, closestParticleT) : t1;
+		hitParticle = true;
+		particleColour += particle.colour;
+		particlePower += particle.strength * (t2 - t1); // rayDirection length is 1
+	}
+
+	if (hitParticle) { // Probably not necessary since particlePower starts at 0
+		float bayerValue = texelFetch(bayerMatrix, ivec2(int(love_PixelCoord.x) % bayerMatrixSize, int(love_PixelCoord.y) % bayerMatrixSize), 0).r;
+		float steps = 2.0;
+		// vec3 bayerColour = floor((particleColour + bayerValue / steps) * steps) / steps;
+		// if (bayerColour.r >= 1.0 || bayerColour.g >= 1.0 || bayerColour.b >= 1.0) {
+		if (particlePower >= bayerValue) {
+			// Not using bayerColour here, it's just for the dithering
+			closestForwardHit = PhysicalRayHit (
+				false,
+				vec3(0.0),
+				closestParticleT,
+				rayStart + rayDirection * closestParticleT,
+				vec3(1.0), // Don't care value
+				0.0,
+				particleColour * (1.0 + particlePower * 4.0)
+			);
 		}
 	}
 
@@ -402,7 +451,7 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
 				float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
 				float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-				outColour += rayEndFactor * closestHit.colour * incomingLight * teleportFactor * influence;
+				outColour += rayEndFactor * (closestHit.colour * incomingLight + closestHit.emission) * teleportFactor * influence;
 				if (closestHit.reflectivity == 0.0) {
 					break;
 				} else if (dot(closestHit.normal, rayDirection) < 0.0) {
@@ -421,9 +470,6 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	return outColour;
 }
 
-// uniform sampler2D bayerMatrix;
-// uniform int bayerMatrixSize;
-
 vec4 effect(vec4 loveColour, sampler2D image, vec2 textureCoords, vec2 windowCoords) {
 	vec3 direction = normalize(directionPreNormalise);
 
@@ -437,10 +483,6 @@ vec4 effect(vec4 loveColour, sampler2D image, vec2 textureCoords, vec2 windowCoo
 	}
 
 	vec3 outColour = getRayColour(cameraPosition, direction);
-	// float bayerValue = texelFetch(bayerMatrix, ivec2(int(windowCoords.x) % bayerMatrixSize, int(windowCoords.y) % bayerMatrixSize), 0).r;
-	// float steps = 8.0;
-	// outColour = outColour + bayerValue / steps;
-	// outColour = floor(outColour * steps) / steps;
 	return fovFadeFactor * loveColour * vec4(outColour, 1.0);
 }
 

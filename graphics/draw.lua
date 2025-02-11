@@ -2,6 +2,7 @@ local mathsies = require("lib.mathsies")
 local vec3 = mathsies.vec3
 local mat4 = mathsies.mat4
 
+local assets = require("assets")
 local consts = require("consts")
 
 local graphics = {}
@@ -47,8 +48,8 @@ function graphics:drawState(state)
 	sceneShader:send("ambientLightAmount", state.ambientLightAmount)
 	sceneShader:send("time", state.time)
 	love.graphics.setShader(sceneShader)
-	-- sceneShader:send("bayerMatrixSize", 8)
-	-- sceneShader:send("bayerMatrix", love.graphics.newImage("bayer8.png"))
+	sceneShader:send("bayerMatrixSize", 8)
+	sceneShader:send("bayerMatrix", assets.images.bayer8)
 	love.graphics.draw(self.dummyTexture, 0, 0, 0, self.outputCanvas:getDimensions())
 
 	love.graphics.setShader()

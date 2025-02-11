@@ -23,7 +23,7 @@ function graphics:sendTriangles(set)
 end
 
 function graphics:getObjectUniforms(state, tris)
-	local spheres, lights = {}, {}
+	local spheres, lights, particles = {}, {}, {}
 	for entity in state.entities:elements() do
 		if entity.class.type == "light" then
 			lights[#lights + 1] = {
@@ -59,7 +59,38 @@ function graphics:getObjectUniforms(state, tris)
 		end
 	    ::continue::
 	end
-	return spheres, lights
+	for particle in state.particles:elements() do
+		if particle.draw then
+			local strength = particle.drawStrength
+			if particle.strengthDiameterDivide then
+				strength = strength / (particle.drawRadius * 2)
+			end
+			local radius = particle.drawRadius
+			if particle.radiusFalloff then
+				radius = radius * (1 - particle.timeExisted / particle.lifetimeLength)
+			end
+			particles[#particles+1] = {
+				strength = strength,
+				radius = radius,
+				colour = particle.emissionColour,
+				position = particle.position
+			}
+		end
+	end
+	return spheres, lights, particles
+end
+
+function graphics:sendParticles(set)
+	local sceneShader = self.sceneShader
+	sceneShader:send("particleCount", #set)
+	for i, particle in ipairs(set) do
+		local glslI = i - 1
+		local prefix = "particles[" .. glslI .. "]."
+		sceneShader:send(prefix .. "position", {vec3.components(particle.position)})
+		sceneShader:send(prefix .. "radius", particle.radius)
+		sceneShader:send(prefix .. "strength", particle.strength)
+		sceneShader:sendColor(prefix .. "colour", particle.colour)
+	end
 end
 
 function graphics:sendBoundingSpheres(set)
@@ -89,10 +120,11 @@ end
 
 function graphics:sendObjects(state)
 	local trisSet = {}
-	local objectBoundingSpheres, lights = self:getObjectUniforms(state, trisSet)
+	local objectBoundingSpheres, lights, particles = self:getObjectUniforms(state, trisSet)
 	self:sendTriangles(trisSet)
 	self:sendBoundingSpheres(objectBoundingSpheres)
 	self:sendLights(lights)
+	self:sendParticles(particles)
 end
 
 function graphics:drawAndSendLightShadowMaps(state)

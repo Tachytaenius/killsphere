@@ -27,6 +27,7 @@ function graphics:init(state)
 		"const int maxBoundingSpheres = " .. consts.maxBoundingSpheres .. ";\n" ..
 		"const int maxObjectTriangles = " .. consts.maxObjectTriangles .. ";\n" ..
 		"const int maxLights = " .. consts.maxLights .. ";\n" ..
+		"const int maxParticles = " .. consts.maxParticles .. ";\n" ..
 		love.filesystem.read("shaders/include/objects.glsl") ..
 
 		love.filesystem.read("shaders/scene.glsl")
