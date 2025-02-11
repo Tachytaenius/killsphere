@@ -8,7 +8,7 @@ function gameInstance:handleTemporaryVariables()
 		entity:clearTemporaryFields()
 		entity.will = {}
 	end
-	state.beamsToDraw = {}
+	state.linesToDraw = {}
 end
 
 function gameInstance:executeWills(dt)

@@ -8,8 +8,8 @@ local util = require("util")
 
 local TestShip = class("TestShip", Ship)
 
-TestShip.static.maxSpeed = 50
-TestShip.static.acceleration = 150
+TestShip.static.maxSpeed = 25
+TestShip.static.acceleration = 100
 TestShip.static.maxAngularSpeed = 2
 TestShip.static.angularAcceleration = 10
 
@@ -22,7 +22,7 @@ function TestShip:initialize(args)
 	TestShip.super.initialize(self, args)
 
 	self.guns[#self.guns + 1] = Laser({
-		offset = vec3(0, -0.081461 - 1.1, 2.618913 - 0.1), -- Based on the ship's geometry
+		offset = vec3(0, -0.081461 - 0.1, 2.618913 - 0.1), -- Based on the ship's geometry
 		beamColour = {0.1, 0.9, 1},
 		beamEmissionStrength = 1000,
 		damagePerSecond = 200,

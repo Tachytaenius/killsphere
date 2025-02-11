@@ -16,6 +16,7 @@ function gameInstance:update(dt)
 	self:fireGuns(dt)
 
 	self:handleMotion(dt)
+	self:handleParticles(dt)
 
 	state.time = state.time + dt
 

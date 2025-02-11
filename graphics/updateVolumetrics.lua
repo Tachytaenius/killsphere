@@ -12,7 +12,7 @@ function graphics:updateVolumetrics(state, dt)
 end
 
 function graphics:addBeams(state)
-	for _, beam in ipairs(state.beamsToDraw) do
+	for _, beam in ipairs(state.linesToDraw) do
 		local drawLaserShader = self.drawLaserShader
 		local laserSteps = 1024
 		drawLaserShader:send("fogEmission", self.fogEmissionCanvas)

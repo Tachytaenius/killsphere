@@ -4,6 +4,7 @@ local quat = mathsies.quat
 
 local list = require("lib.list")
 
+local consts = require("consts")
 local classes = require("classes")
 
 local gameInstance = {}
@@ -14,7 +15,8 @@ for _, moduleName in ipairs({
 	"ai",
 	"playerInput",
 	"misc",
-	"fireGuns"
+	"fireGuns",
+	"particles"
 }) do
 	for k, v in pairs(require("gameInstance." .. moduleName)) do
 		gameInstance[k] = v
@@ -25,7 +27,7 @@ function gameInstance:init()
 	local state = {}
 	self.state = state
 	state.time = 0
-	state.worldRadius = 100
+	state.worldRadius = 50
 	state.ambientLightAmount = 0.02
 	state.ambientLightColour = {1, 1, 1}
 	state.paused = false
@@ -41,8 +43,12 @@ function gameInstance:init()
 	state.entities:add(classes.Light({
 		position = vec3(0, 0, 0),
 		lightIntensity = 100,
-		lightColour = {1, 0.75, 0.75}
+		lightColour = {1, 0.75, 0.75},
+		visualRadiusExtra = 2
 	}))
+
+	state.gunSparkTimer = consts.gunSparkTimerLength
+	state.particles = list()
 end
 
 return gameInstance
