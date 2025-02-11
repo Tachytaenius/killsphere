@@ -72,6 +72,8 @@ return function(path)
 		triangle.colour = {0, 0.5, 1}
 		triangle.reflectivity = 0.4
 		triangle.outlineColour = {1, 1, 1, 0.5}
+		triangle.emissionAmount = 0
+		triangle.emissionColour = {0, 0, 0}
 
 		triangles[#triangles + 1] = triangle
 	end

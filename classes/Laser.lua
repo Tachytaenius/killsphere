@@ -17,6 +17,8 @@ function Laser:initialize(args)
 	self.beamRange = args.beamRange
 	assert(args.beamEmissionStrength)
 	self.beamEmissionStrength = args.beamEmissionStrength
+	assert(args.beamRadius)
+	self.beamRadius = args.beamRadius
 
 	self.beamHitT = nil
 	self.beamHitEntity = nil

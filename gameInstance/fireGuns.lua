@@ -97,14 +97,18 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 	end
 
 	if closestHitEntity then
-
+		-- TODO: Damage entity
 	end
 
 	state.linesToDraw[#state.linesToDraw + 1] = {
 		startPosition = rayStart,
 		endPosition = endPosition,
 		emissionAdd = gun.beamEmissionStrength * dt,
-		emissionColour = util.shallowClone(gun.beamColour)
+		emissionColour = util.shallowClone(gun.beamColour),
+
+		drawSolid = true,
+		solidRadius = gun.beamRadius,
+		solidUpVector = vec3.rotate(consts.upVector, gunOrientation)
 	}
 end
 

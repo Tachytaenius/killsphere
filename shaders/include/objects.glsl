@@ -18,6 +18,7 @@ struct BoundingSphere {
 	float radius;
 	int triangleStart;
 	int triangleCount;
+	bool drawAlways;
 };
 
 struct ObjectTriangle { // Not tested against directly
@@ -27,6 +28,8 @@ struct ObjectTriangle { // Not tested against directly
 	vec3 colour;
 	float reflectivity;
 	vec4 outlineColour;
+	vec3 emissionColour;
+	float emissionAmount;
 };
 
 struct Light {

@@ -89,30 +89,6 @@ FogSample sampleFog(vec3 position) {
 	);
 }
 
-// -1 for no object id
-// bool inShadow(vec3 lightPosition, vec3 surfacePosition, int ignoreObjectId, int ignoreSubObjectId) {
-// 	vec3 rayStart = lightPosition;
-// 	vec3 rayDirection = normalize(surfacePosition - lightPosition);
-// 	float dist = distance(surfacePosition, lightPosition);
-// 	for (int j = 0; j < boundingSphereCount; j++) {
-// 		BoundingSphere boundingSphere = boundingSpheres[j];
-// 		ConvexRaycastResult boundingSphereResult = sphereRaycast(boundingSphere.position, boundingSphere.radius, rayStart, rayStart + rayDirection);
-// 		if (!boundingSphereResult.hit) {
-// 			// TODO: Also check t stuff (if needed)
-// 			continue;
-// 		}
-
-// 		for (int i = boundingSphere.triangleStart; i < boundingSphere.triangleStart + boundingSphere.triangleCount; i++) {
-// 			ObjectTriangle triangle = objectTriangles[i];
-// 			TriangleRaycastResult triangleResult = triangleRaycast(triangle.v1, triangle.v2, triangle.v3, rayStart, rayStart + rayDirection);
-// 			if (triangleResult.hit && 0.0 <= triangleResult.t && triangleResult.t <= dist * 0.999) {
-// 				return true;
-// 			}
-// 		}
-// 	}
-// 	return false;
-// }
-
 bool inShadow(int i, vec3 lightPosition, vec3 position) {
 	vec3 lightToPosition = position - lightPosition;
 	float dist = length(lightToPosition);
@@ -187,10 +163,12 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 
 	for (int j = 0; j < boundingSphereCount; j++) {
 		BoundingSphere boundingSphere = boundingSpheres[j];
-		ConvexRaycastResult boundingSphereResult = sphereRaycast(boundingSphere.position, boundingSphere.radius, rayStart, rayStart + rayDirection);
-		if (!boundingSphereResult.hit) {
-			// TODO: Also check t stuff (if needed)
-			continue;
+		if (!boundingSphere.drawAlways) {
+			ConvexRaycastResult boundingSphereResult = sphereRaycast(boundingSphere.position, boundingSphere.radius, rayStart, rayStart + rayDirection);
+			if (!boundingSphereResult.hit) {
+				// TODO: Also check t stuff (if needed)
+				continue;
+			}
 		}
 
 		for (int i = boundingSphere.triangleStart; i < boundingSphere.triangleStart + boundingSphere.triangleCount; i++) {
@@ -212,7 +190,7 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 					position,
 					normal,
 					triangleReflectivityHere,
-					vec3(0.0)
+					triangle.emissionAmount * triangle.emissionColour
 				)); 
 			}
 		}

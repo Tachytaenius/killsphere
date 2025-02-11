@@ -27,6 +27,7 @@ function TestShip:initialize(args)
 		beamEmissionStrength = 1000,
 		damagePerSecond = 200,
 		beamRange = 500,
+		beamRadius = 0.125
 	})
 end
 

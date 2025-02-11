@@ -13,9 +13,8 @@ function gameInstance:update(dt)
 	-- TODO: AI stuff
 	self:executeWills(dt)
 
-	self:fireGuns(dt)
-
 	self:handleMotion(dt)
+	self:fireGuns(dt)
 	self:handleParticles(dt)
 
 	state.time = state.time + dt

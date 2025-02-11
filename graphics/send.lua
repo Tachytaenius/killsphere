@@ -19,11 +19,14 @@ function graphics:sendTriangles(set)
 		sceneShader:sendColor(prefix .. "colour", triangle.colour)
 		sceneShader:send(prefix .. "reflectivity", triangle.reflectivity)
 		sceneShader:sendColor(prefix .. "outlineColour", triangle.outlineColour)
+		sceneShader:sendColor(prefix .. "emissionColour", triangle.emissionColour)
+		sceneShader:send(prefix .. "emissionAmount", triangle.emissionAmount)
 	end
 end
 
 function graphics:getObjectUniforms(state, tris)
 	local spheres, lights, particles = {}, {}, {}
+
 	for entity in state.entities:elements() do
 		if entity.class.type == "light" then
 			lights[#lights + 1] = {
@@ -53,12 +56,72 @@ function graphics:getObjectUniforms(state, tris)
 					v3 = modelToWorld * triangle.v3,
 					colour = util.shallowClone(triangle.colour),
 					reflectivity = triangle.reflectivity,
-					outlineColour = util.shallowClone(triangle.outlineColour)
+					outlineColour = util.shallowClone(triangle.outlineColour),
+					emissionColour = util.shallowClone(triangle.emissionColour),
+					emissionAmount = triangle.emissionAmount
 				}
 			end
 		end
 	    ::continue::
 	end
+
+	for _, line in ipairs(state.linesToDraw) do
+		if not line.drawSolid then
+			goto continue
+		end
+		spheres[#spheres + 1] = {
+			drawAlways = true,
+			triangleStart = #tris,
+			triangleCount = 2 + 3 * 2 -- 2 end triangles, connected by 3 rectangles with 2 triangles each
+		}
+		local forwards = vec3.normalise(line.endPosition - line.startPosition)
+		local up = line.solidUpVector
+		local right = vec3.cross(forwards, up)
+		local r = line.solidRadius
+
+		-- Top vertex
+		local v1 =
+			line.startPosition +
+			right * 0 + -- x
+			up * r -- y
+
+		-- Bottom vertex 1
+		local v2 =
+			line.startPosition +
+			right * r * math.sin(consts.tau / 3) + -- x
+			up * r * math.cos(consts.tau / 3) -- y
+
+		-- Bottom vertex 2
+		local v3 =
+			line.startPosition +
+			right * r * math.sin(2 * consts.tau / 3) + -- x
+			up * r * math.cos(2 * consts.tau / 3) -- y
+
+		local z = line.endPosition - line.startPosition
+		local function addTri(v1, v2, v3)
+			tris[#tris + 1] = {
+				v1 = v1,
+				v2 = v2,
+				v3 = v3,
+				colour = {0, 0, 0},
+				reflectivity = 0,
+				outlineColour = {0, 0, 0, 0},
+				emissionColour = line.emissionColour,
+				emissionAmount = 1
+			}
+		end
+		addTri(v1, v2, v3)
+		addTri(v1 + z, v2 + z, v3 + z)
+		addTri(v1, v1 + z, v2)
+		addTri(v1 + z, v2 + z, v2)
+		addTri(v2, v2 + z, v3)
+		addTri(v2 + z, v3 + z, v3)
+		addTri(v3, v3 + z, v1)
+		addTri(v3 + z, v1 + z, v1)
+
+	    ::continue::
+	end
+
 	for particle in state.particles:elements() do
 		if particle.draw then
 			local strength = particle.drawStrength
@@ -77,6 +140,7 @@ function graphics:getObjectUniforms(state, tris)
 			}
 		end
 	end
+
 	return spheres, lights, particles
 end
 
@@ -99,8 +163,13 @@ function graphics:sendBoundingSpheres(set)
 	for i, boundingSphere in ipairs(set) do
 		local glslI = i - 1
 		local prefix = "boundingSpheres[" .. glslI .. "]."
-		sceneShader:send(prefix .. "position", {vec3.components(boundingSphere.position)})
-		sceneShader:send(prefix .. "radius", boundingSphere.radius)
+		if boundingSphere.drawAlways then
+			sceneShader:send(prefix .. "drawAlways", true)
+		else
+			sceneShader:send(prefix .. "drawAlways", false)
+			sceneShader:send(prefix .. "position", {vec3.components(boundingSphere.position)})
+			sceneShader:send(prefix .. "radius", boundingSphere.radius)
+		end
 		sceneShader:send(prefix .. "triangleStart", boundingSphere.triangleStart)
 		sceneShader:send(prefix .. "triangleCount", boundingSphere.triangleCount)
 	end
