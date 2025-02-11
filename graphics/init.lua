@@ -4,7 +4,8 @@ local graphics = {}
 
 for _, moduleName in ipairs({
 	"draw",
-	"send"
+	"send",
+	"updateVolumetrics"
 }) do
 	for k, v in pairs(require("graphics." .. moduleName)) do
 		graphics[k] = v

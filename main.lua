@@ -26,6 +26,7 @@ end
 
 function love.update(dt)
 	gameInstance:update(dt)
+	graphics:updateVolumetrics(gameInstance.state, dt)
 end
 
 function love.draw()

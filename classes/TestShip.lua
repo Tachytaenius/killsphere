@@ -1,6 +1,7 @@
 local vec3 = require("lib.mathsies").vec3
 
 local class = require("lib.middleclass")
+local Laser = require("classes.Laser")
 local Ship = require("classes.Ship")
 
 local util = require("util")
@@ -19,7 +20,14 @@ TestShip.static.fov = math.rad(100)
 
 function TestShip:initialize(args)
 	TestShip.super.initialize(self, args)
-	-- add to guns . . .
+
+	self.guns[#self.guns + 1] = Laser({
+		offset = vec3(0, -0.081461 - 1.1, 2.618913 - 0.1), -- Based on the ship's geometry
+		beamColour = {0.1, 0.9, 1},
+		beamEmissionStrength = 1000,
+		damagePerSecond = 200,
+		beamRange = 500,
+	})
 end
 
 return TestShip

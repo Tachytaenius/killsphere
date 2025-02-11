@@ -73,7 +73,8 @@ FogSample sampleFog(vec3 position) {
 	vec3 textureCoords = position / arenaRadius * 0.5 + 0.5;
 	ivec3 textureCoordsInt = ivec3(vec3(whd) * textureCoords);
 
-	// TODO: Filter colour and emission by adding scatterance into the weighted averaging so that you don't have to deal with no-scattering voxels of colour in the filtering
+	// TODO: Filter colour by adding scatterance into the weighted averaging so that you don't have to deal with no-scattering voxels of colour in the filtering
+	// Emission is kept as-is for stylistic reasons
 	vec4 scatteranceAbsorptionSample = Texel(fogScatteranceAbsorption, textureCoords);
 	vec4 colourSample = texelFetch(fogColour, textureCoordsInt, 0);
 	vec4 emissionSample = texelFetch(fogEmission, textureCoordsInt, 0);

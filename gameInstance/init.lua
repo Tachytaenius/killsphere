@@ -13,7 +13,8 @@ for _, moduleName in ipairs({
 	"motion",
 	"ai",
 	"playerInput",
-	"misc"
+	"misc",
+	"fireGuns"
 }) do
 	for k, v in pairs(require("gameInstance." .. moduleName)) do
 		gameInstance[k] = v

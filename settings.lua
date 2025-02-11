@@ -18,6 +18,8 @@ return {
 		yawRight = "l",
 		yawLeft = "j",
 		rollAnticlockwise = "u",
-		rollClockwise = "o"
+		rollClockwise = "o",
+
+		shoot = "space"
 	}
 }

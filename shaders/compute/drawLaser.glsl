@@ -4,6 +4,7 @@ uniform vec3 lineStart;
 uniform vec3 lineEnd;
 uniform int lineSteps;
 uniform vec3 lineColour;
+uniform float lineEmissionAdd;
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 void computemain() {
@@ -26,6 +27,6 @@ void computemain() {
 		return;
 	}
 	vec3 emission = imageLoad(fogEmission, xyz).rgb;
-	emission += lineColour * stepSize;
+	emission += lineColour * lineEmissionAdd * stepSize;
 	imageStore(fogEmission, xyz, vec4(emission, 1.0));
 }

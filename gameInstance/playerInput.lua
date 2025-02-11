@@ -30,6 +30,15 @@ function gameInstance:handlePlayerInput()
 	if love.keyboard.isDown(settings.controls.rollClockwise) then rotation = rotation - consts.forwardVector end
 	if love.keyboard.isDown(settings.controls.rollAnticlockwise) then rotation = rotation + consts.forwardVector end
 	player.will.targetAngularVelocity = util.normaliseOrZero(rotation) * player.class.maxAngularSpeed
+
+	local shooting = love.keyboard.isDown(settings.controls.shoot)
+	if player.guns then
+		-- Skipping will system here I suppose
+		for _, gun in ipairs(player.guns) do
+			assert(gun.triggered == nil, "Gun triggered state should be unset at this point in update (its triggered state was not cleared)")
+			gun.triggered = shooting
+		end
+	end
 end
 
 return gameInstance

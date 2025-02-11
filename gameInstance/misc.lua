@@ -1,3 +1,5 @@
+local vec3 = require("lib.mathsies").vec3
+
 local gameInstance = {}
 
 function gameInstance:handleTemporaryVariables()
@@ -6,6 +8,7 @@ function gameInstance:handleTemporaryVariables()
 		entity:clearTemporaryFields()
 		entity.will = {}
 	end
+	state.beamsToDraw = {}
 end
 
 function gameInstance:executeWills(dt)
