@@ -11,6 +11,9 @@ function graphics:sendTriangles(set)
 	local sceneShader = self.sceneShader
 	-- sceneShader:send("objectTriangleCount", #set)
 	for i, triangle in ipairs(set) do
+		if i > consts.maxObjectTriangles then
+			break
+		end
 		local glslI = i - 1
 		local prefix = "objectTriangles[" .. glslI .. "]."
 		sceneShader:send(prefix .. "v1", {vec3.components(triangle.v1)})
@@ -148,6 +151,9 @@ function graphics:sendParticles(set)
 	local sceneShader = self.sceneShader
 	sceneShader:send("particleCount", #set)
 	for i, particle in ipairs(set) do
+		if i > consts.maxParticles then
+			break
+		end
 		local glslI = i - 1
 		local prefix = "particles[" .. glslI .. "]."
 		sceneShader:send(prefix .. "position", {vec3.components(particle.position)})
@@ -161,6 +167,9 @@ function graphics:sendBoundingSpheres(set)
 	local sceneShader = self.sceneShader
 	sceneShader:send("boundingSphereCount", #set)
 	for i, boundingSphere in ipairs(set) do
+		if i > consts.maxBoundingSpheres then
+			break
+		end
 		local glslI = i - 1
 		local prefix = "boundingSpheres[" .. glslI .. "]."
 		if boundingSphere.drawAlways then
@@ -179,6 +188,9 @@ function graphics:sendLights(set)
 	local sceneShader = self.sceneShader
 	sceneShader:send("lightCount", #set)
 	for i, light in ipairs(set) do
+		if i > consts.maxLights then
+			break
+		end
 		local glslI = i - 1
 		local prefix = "lights[" .. glslI .. "]."
 		sceneShader:send(prefix .. "position", {vec3.components(light.position)})
@@ -201,16 +213,16 @@ function graphics:drawAndSendLightShadowMaps(state)
 	love.graphics.setShader(self.shadowMapShader)
 	love.graphics.setBlendMode("darken", "premultiplied") -- Closer is saved
 	local i = 1
+	local cameraToClip = mat4.perspectiveLeftHanded(
+		1,
+		consts.tau / 4,
+		consts.farPlaneDistance,
+		consts.nearPlaneDistance
+	)
 	for entity in state.entities:elements() do
 		if entity.class.type ~= "light" then
 			goto continue
 		end
-		local cameraToClip = mat4.perspectiveLeftHanded(
-			1,
-			consts.tau / 4,
-			consts.farPlaneDistance,
-			consts.nearPlaneDistance
-		)
 		self.shadowMapShader:send("cameraPosition", {vec3.components(entity.position)})
 		for side, orientation in ipairs(consts.cubemapOrientationsYFlip) do
 			love.graphics.setCanvas(self.lightShadowMaps[i], side)
