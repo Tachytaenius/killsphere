@@ -2,6 +2,7 @@ local mathsies = require("lib.mathsies")
 local vec3 = mathsies.vec3
 local quat = mathsies.quat
 
+local classes = require("classes")
 local util = require("util")
 local consts = require("consts")
 
@@ -65,6 +66,7 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 	local endPosition = rayStart + rayFullLengthStartToEnd * (closestHitT or 1)
 
 	if closestHitT then
+		-- Add spark(s)
 		local sparksDirection = vec3.reflect(vec3.normalise(rayFullLengthStartToEnd), closestHitNormal)
 		-- local sparksCount = 1
 		-- for _=1, sparksCount do
@@ -94,6 +96,14 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 				drawStrength = 1
 			})
 		end
+
+		-- Add glow
+		state.entities:add(classes.Light({
+			position = endPosition + closestHitNormal * 0.2,
+			lightIntensity = 20,
+			lightColour = {1, 1, 1},
+			deleteNextUpdate = true
+		}))
 	end
 
 	if closestHitEntity then

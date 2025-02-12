@@ -43,8 +43,7 @@ function gameInstance:init()
 	state.entities:add(classes.Light({
 		position = vec3(0, 0, 0),
 		lightIntensity = 100,
-		lightColour = {1, 0.75, 0.75},
-		visualRadiusExtra = 2
+		lightColour = {1, 0.75, 0.75}
 	}))
 
 	state.gunSparkTimer = consts.gunSparkTimerLength

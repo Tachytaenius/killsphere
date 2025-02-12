@@ -4,9 +4,16 @@ local gameInstance = {}
 
 function gameInstance:handleTemporaryVariables()
 	local state = self.state
-	for entity in state.entities:elements() do
-		entity:clearTemporaryFields()
-		entity.will = {}
+	local i = 1
+	while i <= state.entities.size do
+		local entity = state.entities:get(i)
+		if entity.deleteNextUpdate then
+			state.entities:remove(entity)
+		else
+			entity:clearTemporaryFields()
+			entity.will = {}
+			i = i + 1
+		end
 	end
 	state.linesToDraw = {}
 end

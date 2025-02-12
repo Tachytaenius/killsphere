@@ -326,12 +326,9 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 			int fogLightCount = 0;
 			for (int i = 0; i < lightCount; i++) {
 				Light light = lights[i];
-				ConvexRaycastResult lightRaycastResult = sphereRaycast(light.position, lightRadius + lightRadiusSizeExtra, fogStart, fogStart + fogEnd);
+				ConvexRaycastResult lightRaycastResult = sphereRaycast(light.position, lightRadius + lightRadiusSizeExtra, fogStart, fogEnd);
 				if (!lightRaycastResult.hit) {
 					continue;
-				}
-				if (!(0.0 <= lightRaycastResult.t1 && lightRaycastResult.t2 <= 1.0)) {
-					// continue;
 				}
 				fogLights[fogLightCount] = light;
 				fogLightCount += 1;
