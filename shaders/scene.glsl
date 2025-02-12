@@ -222,11 +222,15 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 	}
 
 	if (hitParticle) { // Probably not necessary since particlePower starts at 0
+		float noise = snoise(vec4(rayDirection * 50.0, time * 40.0));
+		float particlePowerWarp = (cos(2.0 * tau * noise) * 0.5 + 0.5) * 0.8 + 0.2;
+		float warpedParticlePower = particlePower * particlePowerWarp;
+
 		float bayerValue = texelFetch(bayerMatrix, ivec2(int(love_PixelCoord.x) % bayerMatrixSize, int(love_PixelCoord.y) % bayerMatrixSize), 0).r;
 		float steps = 2.0;
 		// vec3 bayerColour = floor((particleColour + bayerValue / steps) * steps) / steps;
 		// if (bayerColour.r >= 1.0 || bayerColour.g >= 1.0 || bayerColour.b >= 1.0) {
-		if (particlePower >= bayerValue) {
+		if (warpedParticlePower >= bayerValue) {
 			// Not using bayerColour here, it's just for the dithering
 			closestForwardHit = PhysicalRayHit (
 				false,
@@ -235,7 +239,7 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 				rayStart + rayDirection * closestParticleT,
 				vec3(1.0), // Don't care value
 				0.0,
-				particleColour * (1.0 + particlePower * 4.0)
+				particleColour * (1.0 + warpedParticlePower * 4.0)
 			);
 		}
 	}

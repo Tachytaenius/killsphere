@@ -72,8 +72,14 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 		-- for _=1, sparksCount do
 		if throwSpark then
 			local power = util.randomRange(0.1, 0.9)
-			local speed = power * 100
-			local lifetime = 0.25 * (1 - power)
+			local speed = power * 5
+			local lifetime = 2 * (1 - power)
+			local extra = false
+			if love.math.random() < 0.4 then
+				extra = true
+				speed = speed * 10
+				lifetime = lifetime / 4
+			end
 			-- local rotation = util.randomInSphereVolume(consts.tau / 8)
 			-- local direction = vec3.rotate(sparksDirection, quat.fromAxisAngle(rotation))
 			local directionPreNormalise = util.randomInSphereVolume(0.7) + sparksDirection * 0.9
@@ -84,7 +90,7 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 				position = endPosition,
 				velocity = direction * speed,
 				emissionColour = {1, 0.5, 0.1},
-				emission = 3000,
+				emission = 500 * (extra and 6 or 1),
 				lifetimeLength = lifetime,
 				timeExisted = 0,
 				emissionFalloff = true,
