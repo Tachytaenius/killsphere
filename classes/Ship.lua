@@ -10,6 +10,9 @@ Ship.static.type = "ship"
 function Ship:initialize(args)
 	Ship.super.initialize(self, args)
 
+	assert(self.class.maxHealth)
+	self.health = self.class.maxHealth
+
 	self.guns = {}
 end
 

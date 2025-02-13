@@ -77,7 +77,7 @@ function graphics:init(state)
 	self.tickFogMode = 0
 	self.tickFogSkipCyclePosition = 0
 
-	self.drawLaserShader = love.graphics.newComputeShader("shaders/compute/drawLaser.glsl")
+	self.drawLineShader = love.graphics.newComputeShader("shaders/compute/drawLine.glsl")
 
 	self.shadowMapShader = love.graphics.newShader("shaders/shadowMap.glsl")
 	self.lightShadowMaps = {}

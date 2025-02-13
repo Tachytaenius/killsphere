@@ -1,4 +1,4 @@
-local vec3 = require("lib.mathsies").vec3
+local util = require("util")
 
 local gameInstance = {}
 

@@ -13,16 +13,21 @@ end
 
 function graphics:addBeams(state)
 	for _, beam in ipairs(state.linesToDraw) do
-		local drawLaserShader = self.drawLaserShader
-		local laserSteps = 1024
-		drawLaserShader:send("fogEmission", self.fogEmissionCanvas)
-		drawLaserShader:send("worldRadius", state.worldRadius)
-		drawLaserShader:send("lineStart", {vec3.components(beam.startPosition)})
-		drawLaserShader:send("lineEnd", {vec3.components(beam.endPosition)})
-		drawLaserShader:send("lineSteps", laserSteps)
-		drawLaserShader:send("lineEmissionAdd", beam.emissionAdd)
-		drawLaserShader:sendColor("lineColour", beam.emissionColour)
-		love.graphics.dispatchThreadgroups(drawLaserShader, math.ceil(laserSteps / drawLaserShader:getLocalThreadgroupSize()))
+		local drawLineShader = self.drawLineShader
+		local laserSteps = 512
+		drawLineShader:send("fogEmission", self.fogEmissionCanvas)
+		drawLineShader:send("fogColour", self.fogColourCanvas)
+		drawLineShader:send("fogScatteranceAbsorption", self.fogScatteranceAbsorptionCanvas)
+		drawLineShader:send("worldRadius", state.worldRadius)
+		drawLineShader:send("lineStart", {vec3.components(beam.startPosition)})
+		drawLineShader:send("lineEnd", {vec3.components(beam.endPosition)})
+		drawLineShader:send("lineSteps", laserSteps)
+		drawLineShader:send("lineEmissionAdd", beam.emissionAdd or 0)
+		drawLineShader:sendColor("lineColour", beam.emissionColour or {0, 0, 0})
+		drawLineShader:send("lineScatteranceAdd", beam.scatteranceAdd or 0)
+		drawLineShader:send("lineAbsorptionAdd", beam.absorptionAdd or 0)
+		drawLineShader:sendColor("lineFogColour", beam.fogColour or {0, 0, 0})
+		love.graphics.dispatchThreadgroups(drawLineShader, math.ceil(laserSteps / drawLineShader:getLocalThreadgroupSize()))
 	end
 end
 

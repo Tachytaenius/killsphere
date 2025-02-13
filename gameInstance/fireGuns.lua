@@ -8,7 +8,7 @@ local consts = require("consts")
 
 local gameInstance = {}
 
-local function fireBeam(state, entity, gun, dt, throwSpark)
+local function fireBeam(state, entity, gun, pulse, dt, throwSpark)
 	local closestHitT, closestHitEntity, closestHitNormal
 	local rayStart = entity.position + vec3.rotate(gun.offset, entity.orientation)
 	local gunOrientation = entity.orientation -- TODO: Pivoting turrets
@@ -99,21 +99,27 @@ local function fireBeam(state, entity, gun, dt, throwSpark)
 				drawRadius = 0.15,
 				strengthDiameterDivide = true,
 				radiusFalloff = true,
-				drawStrength = 1
+				drawStrength = 1 * (extra and 1.5 or 1),
+				drawColour = "emission"
 			})
 		end
 
 		-- Add glow
 		state.entities:add(classes.Light({
 			position = endPosition + closestHitNormal * 0.2,
-			lightIntensity = 20,
+			lightIntensity = 20 * math.cos(state.time * 80) ^ 4,
 			lightColour = {1, 1, 1},
 			deleteNextUpdate = true
 		}))
 	end
 
 	if closestHitEntity then
-		-- TODO: Damage entity
+		-- Damage entity
+		if pulse then
+			closestHitEntity.health = math.max(0, closestHitEntity.health - gun.damage)
+		else
+			closestHitEntity.health = math.max(0, closestHitEntity.health - gun.damagePerSecond * dt)
+		end
 	end
 
 	state.linesToDraw[#state.linesToDraw + 1] = {
@@ -149,7 +155,7 @@ function gameInstance:fireGuns(dt)
 			else
 				gun.firing = true -- For drawing
 				if gun.class.beam then
-					fireBeam(state, entity, gun, dt, throwSpark)
+					fireBeam(state, entity, gun, gun.class.pulse, dt, throwSpark)
 				end -- TODO: else bullet gun
 			end
 		end

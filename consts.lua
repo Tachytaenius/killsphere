@@ -22,8 +22,8 @@ consts.farPlaneDistance = 1000
 
 consts.maxSpheres = 64
 consts.maxPlanes = 8
-consts.maxBoundingSpheres = 32
-consts.maxObjectTriangles = 256
+consts.maxBoundingSpheres = 64
+consts.maxObjectTriangles = 1024
 consts.maxLights = 8
 consts.maxParticles = 256
 

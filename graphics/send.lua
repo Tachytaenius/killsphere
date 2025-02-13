@@ -127,18 +127,31 @@ function graphics:getObjectUniforms(state, tris)
 
 	for particle in state.particles:elements() do
 		if particle.draw then
-			local strength = particle.drawStrength
-			if particle.strengthDiameterDivide then
-				strength = strength / (particle.drawRadius * 2)
-			end
+			local timeFalloff = 1 - particle.timeExisted / particle.lifetimeLength
+
 			local radius = particle.drawRadius
 			if particle.radiusFalloff then
-				radius = radius * (1 - particle.timeExisted / particle.lifetimeLength)
+				radius = radius * timeFalloff ^ (particle.radiusFalloffPower or 1)
 			end
+
+			local strength = particle.drawStrength
+			if particle.strengthDiameterDivide then
+				strength = strength / (radius * 2)
+			end
+
+			local drawColour
+			if particle.drawColour == "fog" then
+				drawColour = particle.fogColour
+			elseif particle.drawColour == "emission" then
+				drawColour = particle.emissionColour
+			else
+				error("Need to supply a draw colour type to drawn particle")
+			end
+
 			particles[#particles+1] = {
 				strength = strength,
 				radius = radius,
-				colour = particle.emissionColour,
+				colour = drawColour,
 				position = particle.position
 			}
 		end

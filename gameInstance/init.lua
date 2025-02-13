@@ -1,9 +1,9 @@
 local mathsies = require("lib.mathsies")
 local vec3 = mathsies.vec3
-local quat = mathsies.quat
 
 local list = require("lib.list")
 
+local util = require("util")
 local consts = require("consts")
 local classes = require("classes")
 
@@ -16,7 +16,8 @@ for _, moduleName in ipairs({
 	"playerInput",
 	"misc",
 	"fireGuns",
-	"particles"
+	"particles",
+	"damage"
 }) do
 	for k, v in pairs(require("gameInstance." .. moduleName)) do
 		gameInstance[k] = v
@@ -37,9 +38,11 @@ function gameInstance:init()
 		position = vec3(0, 0, 20)
 	})
 	state.entities:add(state.player)
-	state.entities:add(classes.TestShip({
-		position = vec3(0, -20, 0)
-	}))
+	for _=1, 16 do
+		state.entities:add(classes.TestShip({
+			position = util.randomInSphereVolume(state.worldRadius)
+		}))
+	end
 	state.entities:add(classes.Light({
 		position = vec3(0, 0, 0),
 		lightIntensity = 100,

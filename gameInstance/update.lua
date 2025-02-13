@@ -2,6 +2,7 @@ local gameInstance = {}
 
 function gameInstance:update(dt)
 	if self.paused then
+		self.lastUpdateDt = nil
 		return
 	end
 
@@ -15,6 +16,7 @@ function gameInstance:update(dt)
 
 	self:handleMotion(dt)
 	self:fireGuns(dt)
+	self:handleDamage()
 	self:handleParticles(dt)
 
 	state.time = state.time + dt

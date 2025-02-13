@@ -351,8 +351,7 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 				vec3 insideLightsHere = vec3(0.0);
 				for (int i = 0; i < fogLightCount; i++) {
 					Light light = fogLights[i];
-					float extra = 4.0;
-					insideLightsHere += /*light.intensity * */ extra * light.colour * pow(max(0.0, 1.0 - distance(light.position, position) / (lightRadius + lightRadiusSizeExtra)), 4.0);
+					insideLightsHere += 0.25 * light.intensity * light.colour * pow(max(0.0, 1.0 - distance(light.position, position) / (lightRadius + lightRadiusSizeExtra)), 4.0);
 				}
 				outColour +=
 					rayEndFactor * teleportFactor * influence * stepSize * (
