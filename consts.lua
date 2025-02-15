@@ -24,8 +24,9 @@ consts.maxSpheres = 64
 consts.maxPlanes = 8
 consts.maxBoundingSpheres = 64
 consts.maxObjectTriangles = 1024
-consts.maxLights = 8
+consts.maxLights = 2
 consts.maxParticles = 256
+consts.maxSpherePortalPairs = 4
 
 consts.loadObjCoordMultiplier = vec3(1, 1, -1) -- Export OBJs from Blender with +Y up and +Z forward -- TODO: Why is this needed?
 consts.objectVertexFormat = {

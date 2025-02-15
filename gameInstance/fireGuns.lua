@@ -104,13 +104,15 @@ local function fireBeam(state, entity, gun, pulse, dt, throwSpark)
 			})
 		end
 
-		-- Add glow
-		state.entities:add(classes.Light({
-			position = endPosition + closestHitNormal * 0.2,
-			lightIntensity = 20 * math.cos(state.time * 80) ^ 4,
-			lightColour = {1, 1, 1},
-			deleteNextUpdate = true
-		}))
+		-- Add glow if player
+		if entity == state.player then
+			state.entities:add(classes.Light({
+				position = endPosition + closestHitNormal * 0.2,
+				lightIntensity = 20 * math.cos(state.time * 80) ^ 4,
+				lightColour = {1, 1, 1},
+				deleteNextUpdate = true
+			}))
+		end
 	end
 
 	if closestHitEntity then

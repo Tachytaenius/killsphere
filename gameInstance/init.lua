@@ -38,7 +38,7 @@ function gameInstance:init()
 		position = vec3(0, 0, 20)
 	})
 	state.entities:add(state.player)
-	for _=1, 16 do
+	for _=1, 1 do
 		state.entities:add(classes.TestShip({
 			position = util.randomInSphereVolume(state.worldRadius)
 		}))
@@ -48,6 +48,13 @@ function gameInstance:init()
 		lightIntensity = 100,
 		lightColour = {1, 0.75, 0.75}
 	}))
+
+	state.spherePortalPairs = {}
+	state.spherePortalPairs[#state.spherePortalPairs + 1] = {
+		aPosition = util.randomInSphereVolume(state.worldRadius),
+		bPosition = util.randomInSphereVolume(state.worldRadius),
+		radius = 4
+	}
 
 	state.gunSparkTimer = consts.gunSparkTimerLength
 	state.particles = list()

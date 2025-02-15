@@ -27,7 +27,7 @@ function graphics:sendTriangles(set)
 end
 
 function graphics:getObjectUniforms(state, tris)
-	local spheres, lights, particles = {}, {}, {}
+	local spheres, lights, particles, spherePortalPairs = {}, {}, {}, {}
 
 	for entity in state.entities:elements() do
 		if entity.class.type == "light" then
@@ -156,7 +156,31 @@ function graphics:getObjectUniforms(state, tris)
 		end
 	end
 
-	return spheres, lights, particles
+	for _, portalPair in ipairs(state.spherePortalPairs) do
+		-- Assume enabled for now
+		spherePortalPairs[#spherePortalPairs + 1] = {
+			aPosition = portalPair.aPosition,
+			bPosition = portalPair.bPosition,
+			radius = portalPair.radius
+		}
+	end
+
+	return spheres, lights, particles, spherePortalPairs
+end
+
+function graphics:sendSpherePortalPairs(set)
+	local sceneShader = self.sceneShader
+	sceneShader:send("spherePortalPairCount", math.min(consts.maxSpherePortalPairs, #set))
+	for i, pair in ipairs(set) do
+		if i > consts.maxSpherePortalPairs then
+			break
+		end
+		local glslI = i - 1
+		local prefix = "spherePortalPairs[" .. glslI .. "]."
+		sceneShader:send(prefix .. "aPosition", {vec3.components(pair.aPosition)})
+		sceneShader:send(prefix .. "bPosition", {vec3.components(pair.bPosition)})
+		sceneShader:send(prefix .. "radius", pair.radius)
+	end
 end
 
 function graphics:sendParticles(set)
@@ -213,11 +237,12 @@ end
 
 function graphics:sendObjects(state)
 	local trisSet = {}
-	local objectBoundingSpheres, lights, particles = self:getObjectUniforms(state, trisSet)
+	local objectBoundingSpheres, lights, particles, spherePortalPairs = self:getObjectUniforms(state, trisSet)
 	self:sendTriangles(trisSet)
 	self:sendBoundingSpheres(objectBoundingSpheres)
 	self:sendLights(lights)
 	self:sendParticles(particles)
+	self:sendSpherePortalPairs(spherePortalPairs)
 end
 
 function graphics:drawAndSendLightShadowMaps(state)

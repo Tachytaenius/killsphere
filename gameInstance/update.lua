@@ -11,7 +11,7 @@ function gameInstance:update(dt)
 	self:handleTemporaryVariables()
 
 	self:handlePlayerInput()
-	-- TODO: AI stuff
+	self:handleAi()
 	self:executeWills(dt)
 
 	self:handleMotion(dt)

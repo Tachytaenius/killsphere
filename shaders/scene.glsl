@@ -137,10 +137,12 @@ struct PhysicalRayHit {
 	bool sky;
 	vec3 colour;
 	float t;
+	bool teleport;
 	vec3 position;
 	vec3 normal;
 	float reflectivity;
 	vec3 emission;
+	vec3 teleportDestination;
 };
 
 void tryNewClosestHit(inout PhysicalRayHit closestForwardHit, PhysicalRayHit newHit) {
@@ -153,11 +155,13 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 	PhysicalRayHit closestForwardHit = PhysicalRayHit (
 		true, // It's sky
 		sampleSky(rayDirection), // Colour
+		0.0, // Don't care variable
+		false, // No teleport
 		// Don't care variables:
-		0.0,
 		vec3(0.0),
 		vec3(0.0),
 		0.0,
+		vec3(0.0),
 		vec3(0.0)
 	);
 
@@ -187,12 +191,70 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 					false,
 					triangleColourHere,
 					triangleResult.t,
+					false,
 					position,
 					normal,
 					triangleReflectivityHere,
-					triangle.emissionAmount * triangle.emissionColour
+					triangle.emissionAmount * triangle.emissionColour,
+					vec3(0.0)
 				)); 
 			}
+		}
+	}
+
+	for (int i = 0; i < spherePortalPairCount; i++) {
+		SpherePortalPair pair = spherePortalPairs[i];
+		for (int selector = 0; selector <= 1; selector++) {
+			vec3 inPortalPosition = selector == 0 ? pair.aPosition : pair.bPosition;
+			vec3 outPortalPosition = selector == 1 ? pair.aPosition : pair.bPosition;
+
+			float radiusMultiplier = 1.5; 
+			
+			ConvexRaycastResult inPortalShellResult = sphereRaycast(inPortalPosition, pair.radius * radiusMultiplier, rayStart, rayStart + rayDirection);
+			if (!inPortalShellResult.hit) {
+				continue;
+			}
+			vec3 aShellColour = vec3(0.0, 1.0, 0.0);
+			vec3 shellColour = selector == 0 ? aShellColour : 1.0 - aShellColour;
+			for (int shellSelector = 0; shellSelector <= 1; shellSelector++) {
+				float t = shellSelector == 0 ? inPortalShellResult.t1 : inPortalShellResult.t2;
+				vec3 position = rayStart + rayDirection * t;
+				vec3 relativePosition = position - inPortalPosition;
+				float noise = abs(snoise(vec4(relativePosition * 0.3, time * 0.8)));
+				if (noise > 0.05) {
+					continue;
+				}
+				tryNewClosestHit(closestForwardHit, PhysicalRayHit (
+					false,
+					vec3(0.0),
+					t,
+					false,
+					position,
+					normalize(relativePosition),
+					0.0,
+					shellColour,
+					vec3(0.0)
+				));
+			}
+
+			ConvexRaycastResult inPortalResult = sphereRaycast(inPortalPosition, pair.radius, rayStart, rayStart + rayDirection);
+			if (!inPortalResult.hit) {
+				continue;
+			}
+			float t = inPortalResult.t1; // No extra processing with t2 or anything
+			vec3 position = rayStart + rayDirection * t;
+			vec3 relativePosition = position - inPortalPosition; // Relative to sphere centre
+			tryNewClosestHit(closestForwardHit, PhysicalRayHit (
+				false,
+				vec3(0.0),
+				t,
+				true, // Teleport!
+				position,
+				normalize(relativePosition),
+				0.0,
+				vec3(0.0),
+				outPortalPosition - relativePosition * 1.001
+			));
 		}
 	}
 
@@ -236,10 +298,12 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 				false,
 				vec3(0.0),
 				closestParticleT,
+				false,
 				rayStart + rayDirection * closestParticleT,
 				vec3(1.0), // Don't care value
 				0.0,
-				particleColour * (1.0 + warpedParticlePower * 4.0)
+				particleColour * (1.0 + warpedParticlePower * 4.0),
+				vec3(0.0)
 			);
 		}
 	}
@@ -289,24 +353,24 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 	// float nullificationFactor = min(1, distanceToSurface / nullifyStart);
 	float nullificationFactor = distanceToSurface < nullifyStart ? sin(tau / 2.0 * (distanceToSurface / nullifyStart - 0.5)) * 0.5 + 0.5 : 1.0;
 
-	int maxTeleports = 2;
-	float lastTeleportVisibilityProportion = 0.25;
+	int maxArenaTeleports = 2;
+	float lastArenaTeleportVisibilityProportion = 0.25;
 
 	vec3 rayPosition = rayStart;
 	vec3 rayDirection = rayStartDirection;
 	float influence = 1.0;
-	int teleports = 0;
+	int arenaTeleports = 0;
 	float distanceTraversedPrior = 0.0; // Before current ray segment
 	float arenaDiameter = 2.0 * arenaRadius;
-	float maxLightDistance = arenaDiameter * (float(maxTeleports + 1) - lastTeleportVisibilityProportion);
-	float lightDistanceFadeStart = arenaDiameter * float(maxTeleports);
+	float maxLightDistance = arenaDiameter * (float(maxArenaTeleports + 1) - lastArenaTeleportVisibilityProportion);
+	float lightDistanceFadeStart = arenaDiameter * float(maxArenaTeleports);
 	for (int rayBounce = 0; rayBounce < maxRaySegments; rayBounce++) {
-		float teleportFactor = mix(
+		float arenaTeleportFactor = mix(
 			0.5,
-			pow(1.0 - float(teleports) / float(maxTeleports + 1), 2.0),
+			pow(1.0 - float(arenaTeleports) / float(maxArenaTeleports + 1), 2.0),
 			nullificationFactor
 		);
-		if (teleportFactor == 0.0 || influence == 0.0) {
+		if (arenaTeleportFactor == 0.0 || influence == 0.0) {
 			break;
 		}
 		PhysicalRayHit closestHit = getClosestHit(rayPosition, rayDirection);
@@ -353,9 +417,16 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 					Light light = fogLights[i];
 					insideLightsHere += 0.25 * light.intensity * light.colour * pow(max(0.0, 1.0 - distance(light.position, position) / (lightRadius + lightRadiusSizeExtra)), 4.0);
 				}
+				vec3 colourScatterance = fogSample.colour * fogSample.scatterance;
+				float threshold = 0.01;
+				bool disableLight =
+					colourScatterance.r > threshold &&
+					colourScatterance.g > threshold &&
+					colourScatterance.b > threshold;
+				vec3 light = disableLight ? vec3(0.0) : getIncomingLight(position);
 				outColour +=
-					rayEndFactor * teleportFactor * influence * stepSize * (
-						fogSample.colour * fogSample.scatterance * getIncomingLight(position) +
+					rayEndFactor * arenaTeleportFactor * influence * stepSize * (
+						fogSample.colour * fogSample.scatterance * light +
 						fogSample.emission + insideLightsHere
 					);
 				influence *= exp(-fogExtinction * stepSize);
@@ -391,8 +462,6 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 						mod(hitNormal.z + time * ditherSize * 0.01 * 3.0, ditherSize) / ditherSize 
 					) / 3.0
 				) {
-					// vec3 boundaryColour = hitNormal * 0.5 + 0.5;
-					// vec3 boundaryColour = hsv2rgb(vec3(float(teleports) / float(maxTeleports + 1), 1.0, 1.0));
 					float noiseA = snoise(vec4(
 						hitPosition / arenaRadius * 4.0,
 						time * 0.1
@@ -410,37 +479,42 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 					);
 					float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, arenaBoundaryHitPosition);
 					float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-					outColour += boundaryColour * teleportFactor * influence * rayEndFactor;
+					outColour += boundaryColour * arenaTeleportFactor * influence * rayEndFactor;
 					break;
 				} else {
 					distanceTraversedPrior += distance(rayPosition, hitPosition);
 					rayPosition = -hitPosition;
 					vec3 directionWind = vec3(0.0, 0.0, 0.5) * rayDirection * nullificationFactor;
 					rayDirection = normalize(rayDirection + directionWind);
-					teleports += 1;
-					if (teleports > maxTeleports) {
+					arenaTeleports += 1;
+					if (arenaTeleports > maxArenaTeleports) {
 						break;
 					}
 				}
 			}
 		} else {
 			if (!closestHit.sky) {
-				// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
-				vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
-				float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
-				float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-				outColour += rayEndFactor * (closestHit.colour * incomingLight + closestHit.emission) * teleportFactor * influence;
-				if (closestHit.reflectivity == 0.0) {
-					break;
-				} else if (dot(closestHit.normal, rayDirection) < 0.0) {
-					rayDirection = reflect(rayDirection, closestHit.normal);
+				if (!closestHit.teleport) {
+					// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
+					vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
+					float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
+					float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
+					outColour += rayEndFactor * (closestHit.colour * incomingLight + closestHit.emission) * arenaTeleportFactor * influence;
+					if (closestHit.reflectivity == 0.0) {
+						break;
+					} else if (dot(closestHit.normal, rayDirection) < 0.0) {
+						rayDirection = reflect(rayDirection, closestHit.normal);
+						distanceTraversedPrior += distance(rayPosition, closestHit.position);
+						rayPosition = closestHit.position + rayDirection * 0.0001;
+						influence *= closestHit.reflectivity;
+					}
+				} else { // Teleport
 					distanceTraversedPrior += distance(rayPosition, closestHit.position);
-					rayPosition = closestHit.position + rayDirection * 0.0001;
-					influence *= closestHit.reflectivity;
+					rayPosition = closestHit.teleportDestination;
 				}
 			} else {
 				// Sky
-				outColour = closestHit.colour * teleportFactor * influence;
+				outColour = closestHit.colour * arenaTeleportFactor * influence;
 				break;
 			}
 		}

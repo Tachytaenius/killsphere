@@ -21,7 +21,7 @@ struct BoundingSphere {
 	bool drawAlways;
 };
 
-struct ObjectTriangle { // Not tested against directly
+struct ObjectTriangle {
 	vec3 v1;
 	vec3 v2;
 	vec3 v3;
@@ -45,6 +45,12 @@ struct Particle {
 	vec3 position;
 };
 
+struct SpherePortalPair {
+	vec3 aPosition;
+	vec3 bPosition;
+	float radius;
+};
+
 // maxSpheres, maxPlanes, etc definitions should be concatenated before
 
 uniform int sphereCount;
@@ -65,3 +71,6 @@ uniform samplerCube[maxLights] lightShadowMaps;
 
 uniform int particleCount;
 uniform Particle[maxParticles] particles;
+
+uniform int spherePortalPairCount;
+uniform SpherePortalPair[maxSpherePortalPairs] spherePortalPairs;
