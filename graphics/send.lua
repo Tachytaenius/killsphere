@@ -9,7 +9,6 @@ local graphics = {}
 
 function graphics:sendTriangles(set)
 	local sceneShader = self.sceneShader
-	-- sceneShader:send("objectTriangleCount", #set)
 	for i, triangle in ipairs(set) do
 		if i > consts.maxObjectTriangles then
 			break
@@ -162,7 +161,7 @@ end
 
 function graphics:sendParticles(set)
 	local sceneShader = self.sceneShader
-	sceneShader:send("particleCount", #set)
+	sceneShader:send("particleCount", math.min(consts.maxParticles, #set))
 	for i, particle in ipairs(set) do
 		if i > consts.maxParticles then
 			break
@@ -178,7 +177,7 @@ end
 
 function graphics:sendBoundingSpheres(set)
 	local sceneShader = self.sceneShader
-	sceneShader:send("boundingSphereCount", #set)
+	sceneShader:send("boundingSphereCount", math.min(consts.maxBoundingSpheres, #set))
 	for i, boundingSphere in ipairs(set) do
 		if i > consts.maxBoundingSpheres then
 			break
@@ -199,7 +198,7 @@ end
 
 function graphics:sendLights(set)
 	local sceneShader = self.sceneShader
-	sceneShader:send("lightCount", #set)
+	sceneShader:send("lightCount", math.min(consts.maxLights, #set))
 	for i, light in ipairs(set) do
 		if i > consts.maxLights then
 			break
