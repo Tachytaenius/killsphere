@@ -58,6 +58,16 @@ float angleBetween(vec3 a, vec3 b) {
 	);
 }
 
+float sigmoidAscending(float x) { // With x in the unit interval, sigmoidAscending(x) goes from 0 to 1 along a curve based on cosine
+	return x < 0.0 ? 0.0 :
+		x < 1.0 ? 0.5 - 0.5 * cos(tau / 2.0 * x) : 1.0;
+}
+
+float sigmoidDescending(float x) { // With x in the unit interval, sigmoidDescending(x) goes from 1 to 0 along a curve based on cosine
+	return x < 0.0 ? 1.0 :
+		x < 1.0 ? cos(tau / 2.0 * x) * 0.5 + 0.5 : 0.0;
+}
+
 vec3 sampleSky(vec3 direction) {
 	// return (direction * 0.5 + 0.5) * 0.5 + 0.25;
 	return vec3(0.0);
@@ -143,6 +153,7 @@ struct PhysicalRayHit {
 	float reflectivity;
 	vec3 emission;
 	vec3 teleportDestination;
+	vec3 teleportRayDirection;
 };
 
 void tryNewClosestHit(inout PhysicalRayHit closestForwardHit, PhysicalRayHit newHit) {
@@ -161,6 +172,7 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 		vec3(0.0),
 		vec3(0.0),
 		0.0,
+		vec3(0.0),
 		vec3(0.0),
 		vec3(0.0)
 	);
@@ -196,8 +208,9 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 					normal,
 					triangleReflectivityHere,
 					triangle.emissionAmount * triangle.emissionColour,
+					vec3(0.0),
 					vec3(0.0)
-				)); 
+				));
 			}
 		}
 	}
@@ -210,33 +223,41 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 
 			float radiusMultiplier = 1.5; 
 			
+			// Check outer shell
 			ConvexRaycastResult inPortalShellResult = sphereRaycast(inPortalPosition, pair.radius * radiusMultiplier, rayStart, rayStart + rayDirection);
 			if (!inPortalShellResult.hit) {
 				continue;
 			}
-			vec3 aShellColour = vec3(0.0, 1.0, 0.0);
-			vec3 shellColour = selector == 0 ? aShellColour : 1.0 - aShellColour;
+			// Check inside and outside layers of portal outer shell for cool effect
+			vec3 portalColour = selector == 0 ? pair.aColour : pair.bColour;
+			float outerShellPortalColourMultiplier = 0.5;
+			// float portalTraversalColourMultiplier = 0.1;
+			float portalTraversalColourMultiplier = 1.0;
 			for (int shellSelector = 0; shellSelector <= 1; shellSelector++) {
 				float t = shellSelector == 0 ? inPortalShellResult.t1 : inPortalShellResult.t2;
 				vec3 position = rayStart + rayDirection * t;
 				vec3 relativePosition = position - inPortalPosition;
 				float noise = abs(snoise(vec4(relativePosition * 0.3, time * 0.8)));
-				if (noise > 0.05) {
+				float threshold = 0.075;
+				if (noise > threshold) {
 					continue;
 				}
+				float fadeFactor = sigmoidDescending(noise / threshold);
 				tryNewClosestHit(closestForwardHit, PhysicalRayHit (
 					false,
 					vec3(0.0),
 					t,
-					false,
+					true, // Teleport for see-through effect
 					position,
 					normalize(relativePosition),
-					0.0,
-					shellColour,
-					vec3(0.0)
+					1.0,
+					portalColour * outerShellPortalColourMultiplier * fadeFactor,
+					position + rayDirection * 0.001,
+					rayDirection
 				));
 			}
 
+			// Check portal (inside outer shell)
 			ConvexRaycastResult inPortalResult = sphereRaycast(inPortalPosition, pair.radius, rayStart, rayStart + rayDirection);
 			if (!inPortalResult.hit) {
 				continue;
@@ -244,16 +265,21 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 			float t = inPortalResult.t1; // No extra processing with t2 or anything
 			vec3 position = rayStart + rayDirection * t;
 			vec3 relativePosition = position - inPortalPosition; // Relative to sphere centre
+			vec3 normal = normalize(relativePosition);
+			float fadeFactor = max(0.0, -dot(rayDirection, normal));
+			float etaNoise = 1.0 - 0.6 * (snoise(vec4(relativePosition, time * 0.2)) * 0.5 + 0.5);
+			vec3 newDirection = refract(rayDirection, normal, etaNoise);
 			tryNewClosestHit(closestForwardHit, PhysicalRayHit (
 				false,
 				vec3(0.0),
 				t,
 				true, // Teleport!
 				position,
-				normalize(relativePosition),
-				0.0,
-				vec3(0.0),
-				outPortalPosition - relativePosition * 1.001
+				normal,
+				fadeFactor * 0.75 + 0.25,
+				portalColour * portalTraversalColourMultiplier * (1.0 - fadeFactor),
+				outPortalPosition - relativePosition * 1.001,
+				newDirection
 			));
 		}
 	}
@@ -303,6 +329,7 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection) {
 				vec3(1.0), // Don't care value
 				0.0,
 				particleColour * (1.0 + warpedParticlePower * 4.0),
+				vec3(0.0),
 				vec3(0.0)
 			);
 		}
@@ -494,23 +521,21 @@ vec3 getRayColour(vec3 rayStart, vec3 rayStartDirection) {
 			}
 		} else {
 			if (!closestHit.sky) {
+				float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
+				float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
+				distanceTraversedPrior += distance(rayPosition, closestHit.position);
+				vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
+				outColour += rayEndFactor * (closestHit.colour * incomingLight + closestHit.emission) * arenaTeleportFactor * influence;
+				influence *= closestHit.reflectivity;
+				if (closestHit.reflectivity == 0.0) {
+					break;
+				}
 				if (!closestHit.teleport) {
-					// float formShadowFactor = max(0.0, dot(normalize(vec3(1.0, 1.0, 1.0));
-					vec3 incomingLight = getIncomingLightSurface(closestHit.position, closestHit.normal);
-					float currentTotalDistance = distanceTraversedPrior + distance(rayPosition, closestHit.position);
-					float rayEndFactor = 1.0 - clamp((currentTotalDistance - lightDistanceFadeStart) / (maxLightDistance - lightDistanceFadeStart), 0.0, 1.0);
-					outColour += rayEndFactor * (closestHit.colour * incomingLight + closestHit.emission) * arenaTeleportFactor * influence;
-					if (closestHit.reflectivity == 0.0) {
-						break;
-					} else if (dot(closestHit.normal, rayDirection) < 0.0) {
-						rayDirection = reflect(rayDirection, closestHit.normal);
-						distanceTraversedPrior += distance(rayPosition, closestHit.position);
-						rayPosition = closestHit.position + rayDirection * 0.0001;
-						influence *= closestHit.reflectivity;
-					}
+					rayDirection = reflect(rayDirection, closestHit.normal);
+					rayPosition = closestHit.position + rayDirection * 0.0001;
 				} else { // Teleport
-					distanceTraversedPrior += distance(rayPosition, closestHit.position);
 					rayPosition = closestHit.teleportDestination;
+					rayDirection = closestHit.teleportRayDirection;
 				}
 			} else {
 				// Sky

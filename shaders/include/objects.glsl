@@ -48,6 +48,8 @@ struct Particle {
 struct SpherePortalPair {
 	vec3 aPosition;
 	vec3 bPosition;
+	vec3 aColour;
+	vec3 bColour;
 	float radius;
 };
 

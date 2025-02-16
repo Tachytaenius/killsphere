@@ -59,5 +59,6 @@ consts.fogDoAllModes = true -- Go through both sets of XYZ modes in one frame
 
 consts.boundarySphereBounciness = 0.25
 consts.gunSparkTimerLength = 1 / 45
+consts.portalEmissionTimerLength = 1 / 60
 
 return consts

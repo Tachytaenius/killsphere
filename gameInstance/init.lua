@@ -50,13 +50,17 @@ function gameInstance:init()
 	}))
 
 	state.spherePortalPairs = {}
+	local portalRadius = 4
 	state.spherePortalPairs[#state.spherePortalPairs + 1] = {
-		aPosition = util.randomInSphereVolume(state.worldRadius),
-		bPosition = util.randomInSphereVolume(state.worldRadius),
-		radius = 4
+		aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.01),
+		bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.01),
+		aColour = {0, 1, 0},
+		bColour = {0, 0, 1},
+		radius = portalRadius
 	}
 
 	state.gunSparkTimer = consts.gunSparkTimerLength
+	state.portalEmissionTimer = consts.portalEmissionTimerLength
 	state.particles = list()
 end
 

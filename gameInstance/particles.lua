@@ -1,3 +1,6 @@
+local vec3 = require("lib.mathsies").vec3
+
+local consts = require("consts")
 local util = require("util")
 
 local gameInstance = {}
@@ -67,6 +70,42 @@ function gameInstance:handleParticles(dt)
 			particles:remove(particle)
 		else
 			i = i + 1
+		end
+	end
+end
+
+function gameInstance:emitParticlesFromPortals(dt)
+	local state = self.state
+	state.portalEmissionTimer = state.portalEmissionTimer - dt
+	if state.portalEmissionTimer <= 0 then
+		state.portalEmissionTimer = consts.portalEmissionTimerLength
+	end
+	for _, pair in ipairs(state.spherePortalPairs) do
+		for _=1, 12 do -- 12 pairs of particles, coming out of...
+			for i = 0, 1 do -- ...two portals
+				local colour = util.shallowClone(i == 0 and pair.aColour or pair.bColour)
+				local position = i == 0 and pair.aPosition or pair.bPosition -- No need to clone
+				local relativePosition = util.randomOnSphereSurface(pair.radius)
+				local particlePosition = relativePosition + position
+				local particleVelocity = util.randomOnHemisphereSurface(pair.radius, relativePosition) * util.randomRange(0.1, 1) -- No need to normalise relativePosition due to how randomOnHemisphereSurface works
+
+				state.particles:add({
+					position = particlePosition,
+					velocity = particleVelocity,
+					emissionColour = colour,
+					emission = 200,
+					lifetimeLength = util.randomRange(0.2, 2),
+					timeExisted = 0,
+					emissionFalloff = true,
+
+					draw = love.math.random() < 0.03,
+					drawRadius = 0.15,
+					strengthDiameterDivide = true,
+					radiusFalloff = true,
+					drawStrength = 1,
+					drawColour = "emission"
+				})
+			end
 		end
 	end
 end

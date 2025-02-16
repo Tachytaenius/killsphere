@@ -161,6 +161,8 @@ function graphics:getObjectUniforms(state, tris)
 		spherePortalPairs[#spherePortalPairs + 1] = {
 			aPosition = portalPair.aPosition,
 			bPosition = portalPair.bPosition,
+			aColour = portalPair.aColour,
+			bColour = portalPair.bColour,
 			radius = portalPair.radius
 		}
 	end
@@ -179,6 +181,8 @@ function graphics:sendSpherePortalPairs(set)
 		local prefix = "spherePortalPairs[" .. glslI .. "]."
 		sceneShader:send(prefix .. "aPosition", {vec3.components(pair.aPosition)})
 		sceneShader:send(prefix .. "bPosition", {vec3.components(pair.bPosition)})
+		sceneShader:sendColor(prefix .. "aColour", pair.aColour)
+		sceneShader:sendColor(prefix .. "bColour", pair.bColour)
 		sceneShader:send(prefix .. "radius", pair.radius)
 	end
 end
