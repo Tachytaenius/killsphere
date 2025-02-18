@@ -258,7 +258,7 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection, float nullificati
 			vec3 inPortalPosition = selector == 0 ? pair.aPosition : pair.bPosition;
 			vec3 outPortalPosition = selector == 1 ? pair.aPosition : pair.bPosition;
 
-			float radiusMultiplier = 1.5; 
+			float radiusMultiplier = 1.5;
 			
 			// Check outer shell
 			ConvexRaycastResult inPortalShellResult = sphereRaycast(inPortalPosition, pair.radius * radiusMultiplier, rayStart, rayStart + rayDirection);
@@ -304,9 +304,15 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection, float nullificati
 			vec3 position = rayStart + rayDirection * t;
 			vec3 relativePosition = position - inPortalPosition; // Relative to sphere centre
 			vec3 normal = normalize(relativePosition);
-			float fadeFactor = max(0.0, -dot(rayDirection, normal));
+
+			float portalNullificationDistance = (pair.radius * radiusMultiplier - pair.radius) * 4.5;
+			float portalNullificationFactor = sigmoidDescending((distance(cameraPosition, inPortalPosition) - pair.radius) / portalNullificationDistance);
+
 			float etaNoise = 1.0 - 0.6 * (snoise(vec4(relativePosition, time * 0.2)) * 0.5 + 0.5);
-			vec3 newDirection = refract(rayDirection, normal, etaNoise);
+			vec3 newDirection = refract(rayDirection, normal, mix(etaNoise, 1.0, portalNullificationFactor));
+
+			float fadeFactor = max(0.0, -dot(rayDirection, normal));
+
 			tryNewClosestHit(closestForwardHit, PhysicalRayHit (
 				false,
 				vec3(0.0),
@@ -315,87 +321,89 @@ PhysicalRayHit getClosestHit(vec3 rayStart, vec3 rayDirection, float nullificati
 				false,
 				position,
 				normal,
-				fadeFactor * 0.75 + 0.25,
-				portalColour * portalTraversalColourMultiplier * (1.0 - fadeFactor),
+				mix(fadeFactor * 0.75 + 0.25, 1.0, portalNullificationFactor),
+				mix(portalColour * portalTraversalColourMultiplier * (1.0 - fadeFactor), vec3(0.0), portalNullificationFactor),
 				outPortalPosition - relativePosition * 1.001,
 				newDirection
 			));
 		}
 	}
 
-	ConvexRaycastResult arenaBoundaryResult = sphereRaycast(vec3(0.0), arenaRadius, rayStart, rayStart + rayDirection);
-	if (arenaBoundaryResult.hit) {
-		vec3 arenaBoundaryHitPosition = rayStart + rayDirection * arenaBoundaryResult.t2;
-		vec3 hitPosition = arenaBoundaryHitPosition;
-		vec3 hitNormal = normalize(hitPosition);
-		if (dot(rayDirection, hitNormal) > 0.0 || true) {
-			// bool grid =
-			// 	mod(abs(hitNormal.x), 0.2) < 0.0075 ||
-			// 	mod(abs(hitNormal.y), 0.2) < 0.0075 ||
-			// 	mod(abs(hitNormal.z), 0.2) < 0.0075;
-			vec3 gridIn = hitNormal;
-			float size = 0.2;
-			float edge = size * 0.04;
-			gridIn.xz = rotate(gridIn.xz, pingPong(gridIn.y - size * 0.5, size) * tau * 0.1);
-			vec3 gridV = mod(abs(gridIn), size);
-			float grid = min(min(
-				min(1.0, min((gridV.x - edge) / edge, (size - (gridV.x + edge)) / edge)),
-				min(1.0, min((gridV.y - edge) / edge, (size - (gridV.y + edge)) / edge))),
-				min(1.0, min((gridV.z - edge) / edge, (size - (gridV.z + edge)) / edge))
-			);
-			// grid is between 0 and 1
+	if (closestForwardHit.sky) { // Boundary is behind everything, so...
+		ConvexRaycastResult arenaBoundaryResult = sphereRaycast(vec3(0.0), arenaRadius, rayStart, rayStart + rayDirection);
+		if (arenaBoundaryResult.hit) { // Probably not necessary
+			vec3 arenaBoundaryHitPosition = rayStart + rayDirection * arenaBoundaryResult.t2;
+			vec3 hitPosition = arenaBoundaryHitPosition;
+			vec3 hitNormal = normalize(hitPosition);
+			if (dot(rayDirection, hitNormal) > 0.0 || true) {
+				// bool grid =
+				// 	mod(abs(hitNormal.x), 0.2) < 0.0075 ||
+				// 	mod(abs(hitNormal.y), 0.2) < 0.0075 ||
+				// 	mod(abs(hitNormal.z), 0.2) < 0.0075;
+				vec3 gridIn = hitNormal;
+				float size = 0.2;
+				float edge = size * 0.04;
+				gridIn.xz = rotate(gridIn.xz, pingPong(gridIn.y - size * 0.5, size) * tau * 0.1);
+				vec3 gridV = mod(abs(gridIn), size);
+				float grid = min(min(
+					min(1.0, min((gridV.x - edge) / edge, (size - (gridV.x + edge)) / edge)),
+					min(1.0, min((gridV.y - edge) / edge, (size - (gridV.y + edge)) / edge))),
+					min(1.0, min((gridV.z - edge) / edge, (size - (gridV.z + edge)) / edge))
+				);
+				// grid is between 0 and 1
 
-			float ditherSize = 0.01;
-			if (
-				grid > (
-					mod(hitNormal.x, ditherSize) / ditherSize +
-					mod(hitNormal.y + time * ditherSize * 0.01, ditherSize) / ditherSize +
-					mod(hitNormal.z + time * ditherSize * 0.01 * 3.0, ditherSize) / ditherSize 
-				) / 3.0
-			) {
-				float noiseA = snoise(vec4(
-					hitPosition / arenaRadius * 4.0,
-					time * 0.1
-				));
-				float noiseB = pow(
-					// noiseA,
-					mod(noiseA, 0.5),
-					// noiseA * 0.5 + 0.5,
-					1.5
-				);
-				vec3 boundaryColour = mix(
-					noiseB * vec3(0.3, 0.0, 0.0),
-					vec3(0.0, 1.0, 1.0),
-					max(0.0, 1.0 - (noiseA * 0.5 + 0.5) / 0.1)
-				);
-				tryNewClosestHit(closestForwardHit, PhysicalRayHit (
-					false,
-					vec3(0.0),
-					arenaBoundaryResult.t2,
-					false,
-					false,
-					arenaBoundaryHitPosition,
-					hitNormal,
-					0.0,
-					boundaryColour,
-					vec3(0.0),
-					vec3(0.0)
-				));
-			} else {
-				vec3 directionWind = vec3(0.0, 0.0, 0.5) * rayDirection * nullificationFactor;
-				tryNewClosestHit(closestForwardHit, PhysicalRayHit (
-					false,
-					vec3(0.0),
-					arenaBoundaryResult.t2,
-					true,
-					true,
-					arenaBoundaryHitPosition,
-					hitNormal,
-					1.0,
-					vec3(0.0),
-					-hitPosition,
-					normalize(rayDirection + directionWind)
-				));
+				float ditherSize = 0.01;
+				if (
+					grid > (
+						mod(hitNormal.x, ditherSize) / ditherSize +
+						mod(hitNormal.y + time * ditherSize * 0.01, ditherSize) / ditherSize +
+						mod(hitNormal.z + time * ditherSize * 0.01 * 3.0, ditherSize) / ditherSize 
+					) / 3.0
+				) {
+					float noiseA = snoise(vec4(
+						hitPosition / arenaRadius * 4.0,
+						time * 0.1
+					));
+					float noiseB = pow(
+						// noiseA,
+						mod(noiseA, 0.5),
+						// noiseA * 0.5 + 0.5,
+						1.5
+					);
+					vec3 boundaryColour = mix(
+						noiseB * vec3(0.3, 0.0, 0.0),
+						vec3(0.0, 1.0, 1.0),
+						max(0.0, 1.0 - (noiseA * 0.5 + 0.5) / 0.1)
+					);
+					tryNewClosestHit(closestForwardHit, PhysicalRayHit (
+						false,
+						vec3(0.0),
+						arenaBoundaryResult.t2,
+						false,
+						false,
+						arenaBoundaryHitPosition,
+						hitNormal,
+						0.0,
+						boundaryColour,
+						vec3(0.0),
+						vec3(0.0)
+					));
+				} else {
+					vec3 directionWind = vec3(0.0, 0.0, 0.5) * rayDirection * nullificationFactor;
+					tryNewClosestHit(closestForwardHit, PhysicalRayHit (
+						false,
+						vec3(0.0),
+						arenaBoundaryResult.t2,
+						true,
+						true,
+						arenaBoundaryHitPosition,
+						hitNormal,
+						1.0,
+						vec3(0.0),
+						-hitPosition,
+						normalize(rayDirection + directionWind)
+					));
+				}
 			}
 		}
 	}

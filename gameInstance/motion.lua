@@ -28,6 +28,17 @@ function gameInstance:handleMotion(dt)
 			local parallellScaled = parallel * -consts.boundarySphereBounciness
 			entity.velocity = parallellScaled + perpendicular
 		end
+
+		for _, pair in ipairs(state.spherePortalPairs) do
+			for i = 0, 1 do
+				local inPosition = i == 0 and pair.aPosition or pair.bPosition
+				local outPosition = i == 1 and pair.aPosition or pair.bPosition
+				if vec3.distance(entity.position, inPosition) < pair.radius then
+					local relativePosition = entity.position - inPosition
+					entity.position = outPosition - vec3.normalise(relativePosition) * pair.radius * 1.001
+				end
+			end
+		end
 	end
 end
 

@@ -52,8 +52,8 @@ function gameInstance:init()
 	state.spherePortalPairs = {}
 	local portalRadius = 4
 	state.spherePortalPairs[#state.spherePortalPairs + 1] = {
-		aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.01),
-		bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.01),
+		aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.6),
+		bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.6),
 		aColour = {0, 1, 0},
 		bColour = {0, 0, 1},
 		radius = portalRadius
