@@ -25,15 +25,30 @@ function graphics:init(state)
 		"const int maxSpheres = " .. consts.maxSpheres .. ";\n" ..
 		"const int maxPlanes = " .. consts.maxPlanes .. ";\n" ..
 		"const int maxBoundingSpheres = " .. consts.maxBoundingSpheres .. ";\n" ..
-		"const int maxObjectTriangles = " .. consts.maxObjectTriangles .. ";\n" ..
 		"const int maxLights = " .. consts.maxLights .. ";\n" ..
-		"const int maxParticles = " .. consts.maxParticles .. ";\n" ..
 		"const int maxSpherePortalPairs = " .. consts.maxSpherePortalPairs .. ";\n" ..
 		love.filesystem.read("shaders/include/objects.glsl") ..
 
 		love.filesystem.read("shaders/scene.glsl")
 	)
 	self.dummyTexture = love.graphics.newImage(love.image.newImageData(1, 1))
+
+	self.objectTrianglesBuffer = love.graphics.newBuffer({
+		{name = "v1", format = "floatvec3"},
+		{name = "v2", format = "floatvec3"},
+		{name = "v3", format = "floatvec3"},
+		{name = "colour", format = "floatvec3"},
+		{name = "reflectivity", format = "float"},
+		{name = "outlineColour", format = "floatvec4"},
+		{name = "emissionColour", format = "floatvec3"},
+		{name = "emissionAmount", format = "float"}
+	}, consts.maxObjectTriangles, {shaderstorage = true})
+	self.particlesBuffer = love.graphics.newBuffer({
+		{name = "radius", format = "float"},
+		{name = "colour", format = "floatvec3"},
+		{name = "strength", format = "float"},
+		{name = "position", format = "floatvec3"}
+	}, consts.maxParticles, {shaderstorage = true})
 
 	local fogTextureSideLength = math.floor(state.worldRadius * 2.0 / consts.fogDistancePerDatum)
 	-- Colour is filtered manually so that voxels(?) without any scatterance don't influence anything during raytracing

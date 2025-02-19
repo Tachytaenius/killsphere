@@ -49,7 +49,7 @@ function gameInstance:handleDamage()
 					glow = true
 				end
 
-				local draw = love.math.random() < 0.5
+				local draw = love.math.random() < 0.2
 
 				local particle = {
 					position = entity.position + relativePosition,

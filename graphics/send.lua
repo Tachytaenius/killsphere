@@ -7,27 +7,8 @@ local consts = require("consts")
 
 local graphics = {}
 
-function graphics:sendTriangles(set)
-	local sceneShader = self.sceneShader
-	for i, triangle in ipairs(set) do
-		if i > consts.maxObjectTriangles then
-			break
-		end
-		local glslI = i - 1
-		local prefix = "objectTriangles[" .. glslI .. "]."
-		sceneShader:send(prefix .. "v1", {vec3.components(triangle.v1)})
-		sceneShader:send(prefix .. "v2", {vec3.components(triangle.v2)})
-		sceneShader:send(prefix .. "v3", {vec3.components(triangle.v3)})
-		sceneShader:sendColor(prefix .. "colour", triangle.colour)
-		sceneShader:send(prefix .. "reflectivity", triangle.reflectivity)
-		sceneShader:sendColor(prefix .. "outlineColour", triangle.outlineColour)
-		sceneShader:sendColor(prefix .. "emissionColour", triangle.emissionColour)
-		sceneShader:send(prefix .. "emissionAmount", triangle.emissionAmount)
-	end
-end
-
-function graphics:getObjectUniforms(state, tris)
-	local spheres, lights, particles, spherePortalPairs = {}, {}, {}, {}
+function graphics:getObjectUniforms(state)
+	local triangles, spheres, lights, particles, spherePortalPairs = {}, {}, {}, {}, {}
 
 	for entity in state.entities:elements() do
 		if entity.class.type == "light" then
@@ -44,25 +25,37 @@ function graphics:getObjectUniforms(state, tris)
 			if not shape then
 				goto continue
 			end
+
+			local triangleStart = #triangles -- Starts at 0
+
+			local modelToWorld = mat4.transform(entity.position, entity.orientation)
+			for _, triangle in ipairs(shape.triangles) do
+				if #triangles >= consts.maxObjectTriangles then
+					break
+				end
+
+				local v1 = modelToWorld * triangle.v1
+				local v2 = modelToWorld * triangle.v2
+				local v3 = modelToWorld * triangle.v3
+
+				triangles[#triangles + 1] = {
+					v1.x, v1.y, v1.z,
+					v2.x, v2.y, v2.z,
+					v3.x, v3.y, v3.z,
+					triangle.colour[1], triangle.colour[2], triangle.colour[3],
+					triangle.reflectivity,
+					triangle.outlineColour[1], triangle.outlineColour[2], triangle.outlineColour[3], triangle.outlineColour[4],
+					triangle.emissionColour[1], triangle.emissionColour[2], triangle.emissionColour[3],
+					triangle.emissionAmount
+				}
+			end
+
 			spheres[#spheres + 1] = {
 				position = vec3.clone(entity.position),
 				radius = shape.radius,
-				triangleStart = #tris, -- Starts at 0
-				triangleCount = #shape.triangles
+				triangleStart = triangleStart,
+				triangleCount = #triangles - triangleStart
 			}
-			local modelToWorld = mat4.transform(entity.position, entity.orientation)
-			for _, triangle in ipairs(shape.triangles) do
-				tris[#tris + 1] = {
-					v1 = modelToWorld * triangle.v1,
-					v2 = modelToWorld * triangle.v2,
-					v3 = modelToWorld * triangle.v3,
-					colour = util.shallowClone(triangle.colour),
-					reflectivity = triangle.reflectivity,
-					outlineColour = util.shallowClone(triangle.outlineColour),
-					emissionColour = util.shallowClone(triangle.emissionColour),
-					emissionAmount = triangle.emissionAmount
-				}
-			end
 		end
 	    ::continue::
 	end
@@ -71,11 +64,8 @@ function graphics:getObjectUniforms(state, tris)
 		if not line.drawSolid then
 			goto continue
 		end
-		spheres[#spheres + 1] = {
-			drawAlways = true,
-			triangleStart = #tris,
-			triangleCount = 2 + 3 * 2 -- 2 end triangles, connected by 3 rectangles with 2 triangles each
-		}
+		local triangleStart = #triangles
+
 		local forwards = vec3.normalise(line.endPosition - line.startPosition)
 		local up = line.solidUpVector
 		local right = vec3.cross(forwards, up)
@@ -101,15 +91,18 @@ function graphics:getObjectUniforms(state, tris)
 
 		local z = line.endPosition - line.startPosition
 		local function addTri(v1, v2, v3)
-			tris[#tris + 1] = {
-				v1 = v1,
-				v2 = v2,
-				v3 = v3,
-				colour = {0, 0, 0},
-				reflectivity = 0,
-				outlineColour = {0, 0, 0, 0},
-				emissionColour = line.emissionColour,
-				emissionAmount = 1
+			if #triangles >= consts.maxObjectTriangles then
+				return
+			end
+			triangles[#triangles + 1] = {
+				v1.x, v1.y, v1.z,
+				v2.x, v2.y, v2.z,
+				v3.x, v3.y, v3.z,
+				0, 0, 0,
+				0,
+				0, 0, 0, 0,
+				line.emissionColour[1], line.emissionColour[2], line.emissionColour[3],
+				1
 			}
 		end
 		addTri(v1, v2, v3)
@@ -121,11 +114,21 @@ function graphics:getObjectUniforms(state, tris)
 		addTri(v3, v3 + z, v1)
 		addTri(v3 + z, v1 + z, v1)
 
+		spheres[#spheres + 1] = {
+			drawAlways = true,
+			triangleStart = triangleStart,
+			triangleCount = #triangles - triangleStart
+		}
+
 	    ::continue::
 	end
 
 	for particle in state.particles:elements() do
 		if particle.draw then
+			if #particles >= consts.maxParticles then
+				break
+			end
+
 			local timeFalloff = 1 - particle.timeExisted / particle.lifetimeLength
 
 			local radius = particle.drawRadius
@@ -148,10 +151,10 @@ function graphics:getObjectUniforms(state, tris)
 			end
 
 			particles[#particles+1] = {
-				strength = strength,
-				radius = radius,
-				colour = drawColour,
-				position = particle.position
+				radius,
+				drawColour[1], drawColour[2], drawColour[3],
+				strength,
+				particle.position.x, particle.position.y, particle.position.z
 			}
 		end
 	end
@@ -167,7 +170,7 @@ function graphics:getObjectUniforms(state, tris)
 		}
 	end
 
-	return spheres, lights, particles, spherePortalPairs
+	return triangles, spheres, lights, particles, spherePortalPairs
 end
 
 function graphics:sendSpherePortalPairs(set)
@@ -184,22 +187,6 @@ function graphics:sendSpherePortalPairs(set)
 		sceneShader:sendColor(prefix .. "aColour", pair.aColour)
 		sceneShader:sendColor(prefix .. "bColour", pair.bColour)
 		sceneShader:send(prefix .. "radius", pair.radius)
-	end
-end
-
-function graphics:sendParticles(set)
-	local sceneShader = self.sceneShader
-	sceneShader:send("particleCount", math.min(consts.maxParticles, #set))
-	for i, particle in ipairs(set) do
-		if i > consts.maxParticles then
-			break
-		end
-		local glslI = i - 1
-		local prefix = "particles[" .. glslI .. "]."
-		sceneShader:send(prefix .. "position", {vec3.components(particle.position)})
-		sceneShader:send(prefix .. "radius", particle.radius)
-		sceneShader:send(prefix .. "strength", particle.strength)
-		sceneShader:sendColor(prefix .. "colour", particle.colour)
 	end
 end
 
@@ -240,12 +227,22 @@ function graphics:sendLights(set)
 end
 
 function graphics:sendObjects(state)
-	local trisSet = {}
-	local objectBoundingSpheres, lights, particles, spherePortalPairs = self:getObjectUniforms(state, trisSet)
-	self:sendTriangles(trisSet)
+	local triangles, objectBoundingSpheres, lights, particles, spherePortalPairs = self:getObjectUniforms(state)
+
+	if #triangles > 0 then
+		self.objectTrianglesBuffer:setArrayData(triangles)
+	end
+	self.sceneShader:send("ObjectTriangles", self.objectTrianglesBuffer)
+
 	self:sendBoundingSpheres(objectBoundingSpheres)
 	self:sendLights(lights)
-	self:sendParticles(particles)
+
+	if #particles > 0 then
+		self.particlesBuffer:setArrayData(particles)
+	end
+	self.sceneShader:send("particleCount", #particles)
+	self.sceneShader:send("Particles", self.particlesBuffer)
+
 	self:sendSpherePortalPairs(spherePortalPairs)
 end
 

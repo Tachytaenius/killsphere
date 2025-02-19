@@ -1,18 +1,5 @@
 #line 1
 
-struct Sphere {
-	vec3 position;
-	float radius;
-	vec3 colour;
-	float emission;
-};
-
-struct Plane {
-	vec3 normal;
-	float dist;
-	vec3 colour;
-};
-
 struct BoundingSphere {
 	vec3 position;
 	float radius;
@@ -53,26 +40,23 @@ struct SpherePortalPair {
 	float radius;
 };
 
-// maxSpheres, maxPlanes, etc definitions should be concatenated before
-
-uniform int sphereCount;
-uniform Sphere[maxSpheres] spheres;
-
-uniform int planeCount;
-uniform Plane[maxPlanes] planes;
+// maxLights, maxSpherePortalPairs etc definitions should be concatenated before
 
 uniform int boundingSphereCount;
 uniform BoundingSphere[maxBoundingSpheres] boundingSpheres;
 
-uniform int objectTriangleCount;
-uniform ObjectTriangle[maxObjectTriangles] objectTriangles;
+readonly buffer ObjectTriangles {
+	ObjectTriangle objectTriangles[];
+};
 
 uniform int lightCount;
 uniform Light[maxLights] lights;
 uniform samplerCube[maxLights] lightShadowMaps;
 
 uniform int particleCount;
-uniform Particle[maxParticles] particles;
+readonly buffer Particles {
+	Particle particles[];
+};
 
 uniform int spherePortalPairCount;
 uniform SpherePortalPair[maxSpherePortalPairs] spherePortalPairs;
