@@ -28,7 +28,7 @@ function gameInstance:handleDamage()
 			state.entities:remove(entity)
 
 			-- Explode
-			local radius = entity.class.colliderRadius
+			local radius = entity.class.colliderRadius * entity:getRadiusScalar()
 			local volume = 2 / 3 * consts.tau * radius
 			local particlePerVolume = 128
 			for _=1, math.floor(particlePerVolume * volume) do

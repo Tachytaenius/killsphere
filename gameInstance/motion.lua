@@ -19,14 +19,17 @@ function gameInstance:handleMotion(dt)
 			-- entity.position = -vec3.normalise(entity.position) * (state.worldRadius - difference)
 		end
 
-		if entity.class.solid and #entity.position + entity.class.colliderRadius >= state.worldRadius then
-			-- Bounce
-			entity.position = util.limitVectorLength(entity.position, state.worldRadius - entity.class.colliderRadius)
-			local surfaceNormal = -vec3.normalise(entity.position)
-			local parallel = surfaceNormal * vec3.dot(entity.velocity, surfaceNormal)
-			local perpendicular = entity.velocity - parallel
-			local parallellScaled = parallel * -consts.boundarySphereBounciness
-			entity.velocity = parallellScaled + perpendicular
+		if entity.class.solid then
+			local radiusScalar = entity:getRadiusScalar() -- I don't think we should have portals too close to the edge of the world
+			if #entity.position + entity.class.colliderRadius * radiusScalar >= state.worldRadius then
+				-- Bounce
+				entity.position = util.limitVectorLength(entity.position, state.worldRadius - entity.class.colliderRadius * radiusScalar)
+				local surfaceNormal = -vec3.normalise(entity.position)
+				local parallel = surfaceNormal * vec3.dot(entity.velocity, surfaceNormal)
+				local perpendicular = entity.velocity - parallel
+				local parallellScaled = parallel * -consts.boundarySphereBounciness
+				entity.velocity = parallellScaled + perpendicular
+			end
 		end
 
 		for _, pair in ipairs(state.spherePortalPairs) do

@@ -10,7 +10,7 @@ local graphics = {}
 function graphics:drawState(state)
 	local orientation = state.player.orientation
 	local camera = {
-		position = state.player.position + vec3.rotate(state.player.class.cameraOffset, orientation),
+		position = state.player:getModelToWorldMatrix() * state.player.class.cameraOffset,
 		orientation = orientation,
 		fov = state.player.class.fov
 	}

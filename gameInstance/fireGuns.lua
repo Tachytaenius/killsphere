@@ -1,6 +1,7 @@
 local mathsies = require("lib.mathsies")
 local vec3 = mathsies.vec3
 local quat = mathsies.quat
+local mat4 = mathsies.mat4
 
 local classes = require("classes")
 local util = require("util")
@@ -10,7 +11,7 @@ local gameInstance = {}
 
 local function fireBeam(state, entity, gun, pulse, dt, throwSpark)
 	local closestHitT, closestHitEntity, closestHitNormal
-	local rayStart = entity.position + vec3.rotate(gun.offset, entity.orientation)
+	local rayStart = entity:getModelToWorldMatrix() * gun.offset
 	local gunOrientation = entity.orientation -- TODO: Pivoting turrets
 	local rayFullLengthStartToEnd = vec3.rotate(consts.forwardVector, gunOrientation) * gun.beamRange
 	local rayFullLengthEnd = rayStart + rayFullLengthStartToEnd
@@ -21,7 +22,7 @@ local function fireBeam(state, entity, gun, pulse, dt, throwSpark)
 		end
 
 		-- Do a sphere raycast to determine whether triangles should be checked against
-		local t1, t2 = util.sphereRaycast(rayStart, rayFullLengthEnd, targetEntity.position, targetEntity.class.shape.radius)
+		local t1, t2 = util.sphereRaycast(rayStart, rayFullLengthEnd, targetEntity.position, targetEntity.class.shape.radius * targetEntity:getRadiusScalar())
 		local checkTriangles = false
 		if t1 and t2 then -- Always returned together
 			if 0 <= t1 and t1 <= 1 and (not closestHitT or t1 < closestHitT) then
@@ -39,8 +40,10 @@ local function fireBeam(state, entity, gun, pulse, dt, throwSpark)
 		end
 
 		if checkTriangles then
-			local rayStartTransformed = vec3.rotate(rayStart - targetEntity.position, quat.inverse(targetEntity.orientation))
-			local rayEndTransformed = vec3.rotate(rayFullLengthEnd - targetEntity.position, quat.inverse(targetEntity.orientation))
+			local modelToWorld = targetEntity:getModelToWorldMatrix()
+			local worldToModel = mat4.inverse(modelToWorld)
+			local rayStartTransformed = worldToModel * rayStart
+			local rayEndTransformed = worldToModel * rayFullLengthEnd
 			for _, triangle in ipairs(targetEntity.class.shape.triangles) do
 				local t, normal = util.triangleRaycast(rayStartTransformed, rayEndTransformed, triangle.v1, triangle.v2, triangle.v3)
 				if t and 0 <= t and t <= 1 and (not closestHitT or t < closestHitT) then
@@ -107,6 +110,7 @@ local function fireBeam(state, entity, gun, pulse, dt, throwSpark)
 		-- Add glow if player
 		if entity == state.player then
 			state.entities:add(classes.Light({
+				worldState = state,
 				position = endPosition + closestHitNormal * 0.2,
 				lightIntensity = 20 * math.cos(state.time * 80) ^ 4,
 				lightColour = {1, 1, 1},

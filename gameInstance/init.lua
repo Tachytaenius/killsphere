@@ -35,15 +35,18 @@ function gameInstance:init()
 
 	state.entities = list()
 	state.player = classes.TestShip({
+		worldState = state,
 		position = vec3(0, 0, 20)
 	})
 	state.entities:add(state.player)
 	for _=1, 1 do
 		state.entities:add(classes.TestShip({
+			worldState = state,
 			position = util.randomInSphereVolume(state.worldRadius)
 		}))
 	end
 	state.entities:add(classes.Light({
+		worldState = state,
 		position = vec3(0, 0, 0),
 		lightIntensity = 100,
 		lightColour = {1, 0.75, 0.75}
@@ -51,12 +54,14 @@ function gameInstance:init()
 
 	state.spherePortalPairs = {}
 	local portalRadius = 4
+	local portalShellRadiusMultiplier = 1.5 -- TODO: Send to GPU
 	state.spherePortalPairs[#state.spherePortalPairs + 1] = {
-		aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.6),
-		bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * 1.6),
+		aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * portalShellRadiusMultiplier),
+		bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * portalShellRadiusMultiplier),
 		aColour = {0, 1, 0},
 		bColour = {0, 0, 1},
-		radius = portalRadius
+		radius = portalRadius,
+		shellRadiusMultiplier = portalShellRadiusMultiplier
 	}
 
 	state.gunSparkTimer = consts.gunSparkTimerLength

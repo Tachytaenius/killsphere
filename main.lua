@@ -1,9 +1,3 @@
-local mathsies = require("lib.mathsies")
-local vec2 = mathsies.vec2
-local vec3 = mathsies.vec3
-local quat = mathsies.quat
-local mat4 = mathsies.mat4
-
 require("monkeypatch")
 
 local util = require("util")

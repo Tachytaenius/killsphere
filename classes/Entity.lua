@@ -7,6 +7,9 @@ local class = require("lib.middleclass")
 local Entity = class("Entity")
 
 function Entity:initialize(args)
+	assert(args.worldState)
+	self.worldState = args.worldState
+
 	assert(args.position)
 	self.position = vec3.clone(args.position)
 

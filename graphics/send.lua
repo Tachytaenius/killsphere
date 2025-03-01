@@ -28,7 +28,10 @@ function graphics:getObjectUniforms(state)
 
 			local triangleStart = #triangles -- Starts at 0
 
-			local modelToWorld = mat4.transform(entity.position, entity.orientation)
+			local modelToWorld, render = entity:getModelToWorldMatrix()
+			if not render then
+				goto continue
+			end
 			for _, triangle in ipairs(shape.triangles) do
 				if #triangles >= consts.maxObjectTriangles then
 					break
@@ -52,7 +55,7 @@ function graphics:getObjectUniforms(state)
 
 			spheres[#spheres + 1] = {
 				position = vec3.clone(entity.position),
-				radius = shape.radius,
+				radius = shape.radius * entity:getRadiusScalar(),
 				triangleStart = triangleStart,
 				triangleCount = #triangles - triangleStart
 			}
@@ -274,7 +277,10 @@ function graphics:drawAndSendLightShadowMaps(state)
 				if not entityToDraw.class.shape then
 					goto continue
 				end
-				local modelToWorld = mat4.transform(entityToDraw.position, entityToDraw.orientation)
+				local modelToWorld, render = entityToDraw:getModelToWorldMatrix()
+				if not render then
+					goto continue
+				end
 				local modelToClip = worldToClip * modelToWorld
 				self.shadowMapShader:send("modelToWorld", {mat4.components(modelToWorld)})
 				self.shadowMapShader:send("modelToClip", {mat4.components(modelToClip)})

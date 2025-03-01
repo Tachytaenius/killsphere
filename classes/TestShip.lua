@@ -4,6 +4,7 @@ local class = require("lib.middleclass")
 local Laser = require("classes.Laser")
 local Ship = require("classes.Ship")
 
+local consts = require("consts")
 local util = require("util")
 
 local TestShip = class("TestShip", Ship)
@@ -16,6 +17,7 @@ TestShip.static.angularAcceleration = 10
 TestShip.static.shape = util.loadShapeObj("assets/meshes/testShip.obj")
 TestShip.static.colliderRadius = TestShip.static.shape.radius * 0.5
 TestShip.static.cameraOffset = vec3(0, 0.5, 0.4)
+TestShip.static.cameraOffset = vec3(0, 1, -2)
 TestShip.static.fov = math.rad(100)
 
 TestShip.static.maxHealth = 400
