@@ -55,14 +55,14 @@ function gameInstance:init()
 	state.spherePortalPairs = {}
 	local portalRadius = 4
 	local portalShellRadiusMultiplier = 1.5 -- TODO: Send to GPU
-	state.spherePortalPairs[#state.spherePortalPairs + 1] = {
-		aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * portalShellRadiusMultiplier),
-		bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * portalShellRadiusMultiplier),
-		aColour = {0, 1, 0},
-		bColour = {0, 0, 1},
-		radius = portalRadius,
-		shellRadiusMultiplier = portalShellRadiusMultiplier
-	}
+	-- state.spherePortalPairs[#state.spherePortalPairs + 1] = {
+	-- 	aPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * portalShellRadiusMultiplier),
+	-- 	bPosition = util.randomInSphereVolume(state.worldRadius - portalRadius * portalShellRadiusMultiplier),
+	-- 	aColour = {0, 1, 0},
+	-- 	bColour = {0, 0, 1},
+	-- 	radius = portalRadius,
+	-- 	shellRadiusMultiplier = portalShellRadiusMultiplier
+	-- }
 
 	state.gunSparkTimer = consts.gunSparkTimerLength
 	state.portalEmissionTimer = consts.portalEmissionTimerLength
